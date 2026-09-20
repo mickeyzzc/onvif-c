@@ -10,9 +10,9 @@ static httpd_handle_t s_httpd;
 
 static const char *my_ip(void)
 {
-    static char ip[16] = "0.0.0.0";
+    static char         ip[16] = "0.0.0.0";
     esp_netif_ip_info_t info;
-    esp_netif_t *sta = esp_netif_get_handle_from_ifkey("WIFI_STA_DEF");
+    esp_netif_t        *sta = esp_netif_get_handle_from_ifkey("WIFI_STA_DEF");
     if (sta && esp_netif_get_ip_info(sta, &info) == ESP_OK) {
         snprintf(ip, sizeof(ip), IPSTR, IP2STR(&info.ip));
     }
@@ -26,7 +26,10 @@ static const char *my_stream_uri(void)
     return uri;
 }
 
-static bool my_events_gate(void) { return true; }
+static bool my_events_gate(void)
+{
+    return true;
+}
 
 void app_main(void)
 {
@@ -35,7 +38,7 @@ void app_main(void)
         .manufacturer     = "MiBee",
         .model            = "MiBeeCam",
         .hardware_id      = "ESP32-S3",
-        .firmware_version = "v0.1.0",
+        .firmware_version = "v0.2.0",
         .serial           = "aabbccddeeff",
         .uuid             = "f472b01e-0000-1000-8000-aabbccddeeff",
         .ip               = my_ip,
