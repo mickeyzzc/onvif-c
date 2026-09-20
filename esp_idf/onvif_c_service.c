@@ -45,6 +45,20 @@ void onvif_c_cfg_set(const onvif_c_config_t *cfg)
         s_cfg.firmware_version = "v0.2.0";
     if (s_cfg.http_port == 0)
         s_cfg.http_port = 80;
+    if (!s_cfg.scopes) {
+        /* Resolve the default ONCE, before any task exists that reads it:
+         * deriving it per-call would race the discovery task on a shared
+         * static buffer. It depends only on model, fixed after this call. */
+        static char default_scopes[256];
+        snprintf(default_scopes, sizeof(default_scopes),
+                 "onvif://www.onvif.org/type/video_encoder "
+                 "onvif://www.onvif.org/type/NetworkVideoTransmitter "
+                 "onvif://www.onvif.org/hardware/%s "
+                 "onvif://www.onvif.org/name/%s "
+                 "onvif://www.onvif.org/Profile/Streaming",
+                 s_cfg.model, s_cfg.model);
+        s_cfg.scopes = default_scopes;
+    }
 }
 
 const char *onvif_c_cfg_ip(void)
@@ -55,18 +69,7 @@ const char *onvif_c_cfg_ip(void)
 
 const char *onvif_c_cfg_scopes(void)
 {
-    if (s_cfg.scopes) {
-        return s_cfg.scopes;
-    }
-    static char buf[256];
-    snprintf(buf, sizeof(buf),
-             "onvif://www.onvif.org/type/video_encoder "
-             "onvif://www.onvif.org/type/NetworkVideoTransmitter "
-             "onvif://www.onvif.org/hardware/%s "
-             "onvif://www.onvif.org/name/%s "
-             "onvif://www.onvif.org/Profile/Streaming",
-             s_cfg.model, s_cfg.model);
-    return buf;
+    return s_cfg.scopes;
 }
 
 bool onvif_c_cfg_has_events(void)

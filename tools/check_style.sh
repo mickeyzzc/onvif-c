@@ -4,7 +4,7 @@
 set -e
 cd "$(git rev-parse --show-toplevel)"
 if ! command -v clang-format >/dev/null 2>&1; then
-    echo "clang-format not found (pip install clang-format==18.1.8)" >&2
+    echo "clang-format not found (pip install clang-format==22.1.8)" >&2
     exit 2
 fi
 files=$(git ls-files '*.c' '*.h')

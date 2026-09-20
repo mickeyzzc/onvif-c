@@ -81,7 +81,7 @@ Pull-Point 订阅周期，全过退出 0。
 | --- | --- | --- |
 | 宿主机测试 | `tests/run.sh` | 212 项检查：core 金样本字节 + 经桩件驱动的完整 esp_idf 移植层 |
 | 覆盖率 | `tests/coverage.sh` | `core/` + `esp_idf/` 行覆盖 ≥80%（当前 95%） |
-| 代码风格 | `tools/check_style.sh` | clang-format 干净（锁定 `clang-format==18.1.8`，见 `.clang-format`） |
+| 代码风格 | `tools/check_style.sh` | clang-format 干净（锁定 `clang-format==22.1.8`，见 `.clang-format`） |
 | 仓库卫生 | `tools/check-repo-hygiene.sh` | 不跟踪垃圾/涉密文件 |
 
 宿主机测试设施（`tests/`）只需一个 C 编译器 + pthreads：

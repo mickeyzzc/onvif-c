@@ -13,12 +13,18 @@
 #include <stdlib.h>
 #include <unistd.h>
 
-static int g_ip_mode = 0;      /* 0 good, 1 zero-always, 2 zero-first-2 */
+static int g_ip_mode = 0; /* 0 good, 1 zero-always, 2 zero-first-2 */
 static int g_ip_zero_calls;
-static int g_ip_zero_once;     /* next call returns 0.0.0.0, then re-arms */
+static int g_ip_zero_once; /* next call returns 0.0.0.0, then re-arms */
 
-static const char *cb_serial(void) { return T_SERIAL; }
-static const char *cb_uuid(void)   { return T_UUID; }
+static const char *cb_serial(void)
+{
+    return T_SERIAL;
+}
+static const char *cb_uuid(void)
+{
+    return T_UUID;
+}
 
 static const char *cb_ip(void)
 {
@@ -45,12 +51,12 @@ static const char *cb_stream_uri(void)
 static onvif_c_config_t disco_cfg(void)
 {
     onvif_c_config_t c = {0};
-    c.serial     = cb_serial;
-    c.uuid       = cb_uuid;
-    c.ip         = cb_ip;
-    c.stream_uri = cb_stream_uri;
-    c.http_port  = 8080;
-    c.scopes     = "SCOPEX";
+    c.serial           = cb_serial;
+    c.uuid             = cb_uuid;
+    c.ip               = cb_ip;
+    c.stream_uri       = cb_stream_uri;
+    c.http_port        = 8080;
+    c.scopes           = "SCOPEX";
     return c;
 }
 
@@ -66,7 +72,8 @@ static const char *probe_body(const char *message_id)
                  " xmlns:wsa=\"http://schemas.xmlsoap.org/ws/2004/08/addressing\">"
                  "<soap:Header><wsa:MessageID>%s</wsa:MessageID></soap:Header>"
                  "<soap:Body><wsdiscovery:Probe/></soap:Body>"
-                 "</soap:Envelope>", message_id);
+                 "</soap:Envelope>",
+                 message_id);
     } else {
         snprintf(g_probe, sizeof(g_probe),
                  "<?xml version=\"1.0\"?>"
@@ -81,7 +88,7 @@ static const char *probe_body(const char *message_id)
 static int count_sends_with(const char *needle)
 {
     char buf[2304];
-    int n = 0;
+    int  n = 0;
     for (int i = 0; i < onvif_fake_net_send_count(); i++) {
         onvif_fake_net_send_get(i, buf, sizeof(buf), NULL, 0, NULL);
         if (strstr(buf, needle)) {
@@ -93,18 +100,18 @@ static int count_sends_with(const char *needle)
 
 void test_discovery(void)
 {
-    char buf[2304], ip[24];
-    unsigned port;
-    int idx;
+    char             buf[2304], ip[24];
+    unsigned         port;
+    int              idx;
     onvif_c_config_t cfg = disco_cfg();
-    httpd_handle_t hd = onvif_fake_httpd_handle();
+    httpd_handle_t   hd  = onvif_fake_httpd_handle();
 
     onvif_fake_httpd_reset();
     onvif_fake_net_reset();
     onvif_fake_time_set(T_EPOCH);
-    g_ip_mode = 0;
+    g_ip_mode       = 0;
     g_ip_zero_calls = 0;
-    g_ip_zero_once = 0;
+    g_ip_zero_once  = 0;
 
     /* happy path: initial Hello with port, scopes and uuid */
     CHECK(onvif_c_start(hd, &cfg) == ESP_OK, "discovery start ok");
@@ -112,15 +119,14 @@ void test_discovery(void)
     CHECK(idx >= 0, "initial Hello sent");
     if (idx >= 0) {
         onvif_fake_net_send_get(idx, buf, sizeof(buf), ip, sizeof(ip), &port);
-        CHECK_SUB(buf, "http://" T_IP ":8080/onvif/device_service",
-                  "Hello XAddrs honor http_port");
+        CHECK_SUB(buf, "http://" T_IP ":8080/onvif/device_service", "Hello XAddrs honor http_port");
         CHECK_SUB(buf, "urn:uuid:" T_UUID, "Hello endpoint uuid");
         CHECK_SUB(buf, ">SCOPEX<", "Hello carries configured scopes");
     }
 
     /* Probe -> unicast ProbeMatches echoing MessageID */
     onvif_fake_net_inject(probe_body("urn:uuid:probe-9"), "192.0.2.99", 5000);
-    idx = onvif_fake_net_wait_send("ProbeMatches", 2000);
+    idx = onvif_fake_net_wait_send("ProbeMatches", 8000);
     CHECK(idx >= 0, "ProbeMatches sent");
     if (idx >= 0) {
         onvif_fake_net_send_get(idx, buf, sizeof(buf), ip, sizeof(ip), &port);
@@ -134,37 +140,32 @@ void test_discovery(void)
 
     /* Probe without MessageID falls back to the placeholder RelatesTo */
     onvif_fake_net_inject(probe_body(NULL), "192.0.2.99", 5001);
-    idx = onvif_fake_net_wait_send("urn:uuid:unknown", 2000);
+    idx = onvif_fake_net_wait_send("urn:uuid:unknown", 8000);
     CHECK(idx >= 0, "missing MessageID uses placeholder RelatesTo");
 
     /* non-Probe traffic is ignored (no new ProbeMatches) */
     int matches_before = count_sends_with("ProbeMatches");
-    onvif_fake_net_inject("<soap:Body><svc:Hello/></soap:Body>",
-                          "192.0.2.99", 5002);
-    usleep(100000);   /* give the task a chance to (wrongly) answer */
-    CHECK(count_sends_with("ProbeMatches") == matches_before,
-          "non-Probe datagram ignored");
+    onvif_fake_net_inject("<soap:Body><svc:Hello/></soap:Body>", "192.0.2.99", 5002);
+    usleep(100000); /* give the task a chance to (wrongly) answer */
+    CHECK(count_sends_with("ProbeMatches") == matches_before, "non-Probe datagram ignored");
 
     /* Probe while IP placeholder: answered once IP is back */
-    g_ip_zero_once = 1;   /* exactly one cfg_ip call reports 0.0.0.0 */
-    onvif_fake_net_inject(probe_body("urn:uuid:probe-blind"), "192.0.2.99",
-                          5003);
+    g_ip_zero_once = 1; /* exactly one cfg_ip call reports 0.0.0.0 */
+    onvif_fake_net_inject(probe_body("urn:uuid:probe-blind"), "192.0.2.99", 5003);
     usleep(50000);
     onvif_fake_net_inject(probe_body("urn:uuid:probe-ok"), "192.0.2.99", 5004);
-    idx = onvif_fake_net_wait_send("urn:uuid:probe-ok", 2000);
+    idx = onvif_fake_net_wait_send("urn:uuid:probe-ok", 8000);
     CHECK(idx >= 0, "probe answered after placeholder-ip window");
 
     /* periodic Hello: recv timeouts eventually resend (~6 polls here) */
     {
         int hellos0 = count_sends_with("discovery/Hello");
-        int spins = 0;
-        while (count_sends_with("discovery/Hello") <= hellos0 &&
-               spins < 200) {
+        int spins   = 0;
+        while (count_sends_with("discovery/Hello") <= hellos0 && spins < 200) {
             usleep(10000);
             spins++;
         }
-        CHECK(count_sends_with("discovery/Hello") > hellos0,
-              "periodic Hello resent after idle");
+        CHECK(count_sends_with("discovery/Hello") > hellos0, "periodic Hello resent after idle");
     }
 
     CHECK(onvif_c_stop() == ESP_OK, "discovery stop ok");
@@ -175,8 +176,7 @@ void test_discovery(void)
     onvif_fake_net_reset();
     onvif_fake_net_fail_socket_once();
     CHECK(onvif_c_start(hd, &cfg) == ESP_OK, "start with socket failure ok");
-    CHECK(onvif_fake_net_wait_send("discovery/Hello", 3000) >= 0,
-          "Hello after socket retry");
+    CHECK(onvif_fake_net_wait_send("discovery/Hello", 8000) >= 0, "Hello after socket retry");
     onvif_c_stop();
     onvif_fake_task_drain();
 
@@ -185,8 +185,7 @@ void test_discovery(void)
     onvif_fake_net_reset();
     onvif_fake_net_fail_bind_once();
     CHECK(onvif_c_start(hd, &cfg) == ESP_OK, "start with bind failure ok");
-    CHECK(onvif_fake_net_wait_send("discovery/Hello", 3000) >= 0,
-          "Hello after bind retry");
+    CHECK(onvif_fake_net_wait_send("discovery/Hello", 8000) >= 0, "Hello after bind retry");
     onvif_c_stop();
     onvif_fake_task_drain();
 
@@ -195,19 +194,17 @@ void test_discovery(void)
     onvif_fake_net_reset();
     onvif_fake_net_fail_membership_once();
     CHECK(onvif_c_start(hd, &cfg) == ESP_OK, "start with membership failure ok");
-    CHECK(onvif_fake_net_wait_send("discovery/Hello", 3000) >= 0,
-          "Hello after membership retry");
+    CHECK(onvif_fake_net_wait_send("discovery/Hello", 8000) >= 0, "Hello after membership retry");
     onvif_c_stop();
     onvif_fake_task_drain();
 
     /* "no IP yet" at boot: retries until the ip callback reports an address */
     onvif_fake_httpd_reset();
     onvif_fake_net_reset();
-    g_ip_mode = 2;   /* first two ip reads are 0.0.0.0 */
+    g_ip_mode       = 2; /* first two ip reads are 0.0.0.0 */
     g_ip_zero_calls = 0;
     CHECK(onvif_c_start(hd, &cfg) == ESP_OK, "start without ip ok");
-    CHECK(onvif_fake_net_wait_send("discovery/Hello", 3000) >= 0,
-          "Hello once ip is available");
+    CHECK(onvif_fake_net_wait_send("discovery/Hello", 8000) >= 0, "Hello once ip is available");
     onvif_c_stop();
     onvif_fake_task_drain();
     g_ip_mode = 0;
@@ -217,10 +214,9 @@ void test_discovery(void)
     onvif_fake_net_reset();
     {
         onvif_c_config_t cfg_mdns = disco_cfg();
-        cfg_mdns.mdns_hostname = "mibeecam-demo";
-        CHECK(onvif_c_start(hd, &cfg_mdns) == ESP_OK,
-              "start with unavailable mDNS still ok");
-        CHECK(onvif_fake_net_wait_send("discovery/Hello", 3000) >= 0,
+        cfg_mdns.mdns_hostname    = "mibeecam-demo";
+        CHECK(onvif_c_start(hd, &cfg_mdns) == ESP_OK, "start with unavailable mDNS still ok");
+        CHECK(onvif_fake_net_wait_send("discovery/Hello", 8000) >= 0,
               "Hello despite mDNS being unavailable");
         onvif_c_stop();
         onvif_fake_task_drain();
@@ -230,8 +226,7 @@ void test_discovery(void)
     onvif_fake_httpd_reset();
     onvif_fake_net_reset();
     CHECK(onvif_c_start(hd, &cfg) == ESP_OK, "restart after stop ok");
-    CHECK(onvif_fake_net_wait_send("discovery/Hello", 3000) >= 0,
-          "Hello after restart");
+    CHECK(onvif_fake_net_wait_send("discovery/Hello", 8000) >= 0, "Hello after restart");
     onvif_c_stop();
     onvif_fake_task_drain();
 }

@@ -19,17 +19,16 @@
 /* defined in test_port_main.c (one instance for the whole binary) */
 extern int g_checks, g_failures;
 
-#define CHECK(cond, name)                                                \
-    do {                                                                 \
-        g_checks++;                                                      \
-        if (!(cond)) {                                                   \
-            g_failures++;                                                \
-            printf("FAIL: %s (line %d)\n", name, __LINE__);              \
-        }                                                                \
+#define CHECK(cond, name)                                                                          \
+    do {                                                                                           \
+        g_checks++;                                                                                \
+        if (!(cond)) {                                                                             \
+            g_failures++;                                                                          \
+            printf("FAIL: %s (line %d)\n", name, __LINE__);                                        \
+        }                                                                                          \
     } while (0)
 
-#define CHECK_SUB(hay, needle, name)                                     \
-    CHECK((hay) != NULL && strstr((hay), (needle)) != NULL, name)
+#define CHECK_SUB(hay, needle, name) CHECK((hay) != NULL && strstr((hay), (needle)) != NULL, name)
 
 void test_service(void);
 void test_events(void);

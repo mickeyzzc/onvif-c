@@ -17,13 +17,19 @@
 
 /* ---- controllable callbacks ---- */
 
-static int g_gate = 1;
-static int g_fps = 12;
-static int g_ip_mode = 0;      /* 0 good, 1 zero-always */
-static int g_ip_zero_once;     /* next call returns 0.0.0.0, then re-arms */
+static int g_gate    = 1;
+static int g_fps     = 12;
+static int g_ip_mode = 0;  /* 0 good, 1 zero-always */
+static int g_ip_zero_once; /* next call returns 0.0.0.0, then re-arms */
 
-static const char *cb_serial(void) { return T_SERIAL; }
-static const char *cb_uuid(void)   { return T_UUID; }
+static const char *cb_serial(void)
+{
+    return T_SERIAL;
+}
+static const char *cb_uuid(void)
+{
+    return T_UUID;
+}
 
 static const char *cb_ip(void)
 {
@@ -44,19 +50,28 @@ static const char *cb_stream_uri(void)
     return uri;
 }
 
-static const char *cb_snapshot_uri(void) { return "http://" T_IP "/cap"; }
-static uint8_t cb_frame_rate(void)       { return (uint8_t)g_fps; }
-static bool cb_gate(void)                { return g_gate != 0; }
+static const char *cb_snapshot_uri(void)
+{
+    return "http://" T_IP "/cap";
+}
+static uint8_t cb_frame_rate(void)
+{
+    return (uint8_t)g_fps;
+}
+static bool cb_gate(void)
+{
+    return g_gate != 0;
+}
 
 static onvif_c_config_t base_cfg(void)
 {
     onvif_c_config_t c = {0};
-    c.serial     = cb_serial;
-    c.uuid       = cb_uuid;
-    c.ip         = cb_ip;
-    c.stream_uri = cb_stream_uri;
-    c.frame_rate = cb_frame_rate;
-    c.http_port  = 80;
+    c.serial           = cb_serial;
+    c.uuid             = cb_uuid;
+    c.ip               = cb_ip;
+    c.stream_uri       = cb_stream_uri;
+    c.frame_rate       = cb_frame_rate;
+    c.http_port        = 80;
     return c;
 }
 
@@ -65,9 +80,9 @@ static void reset_env(void)
     onvif_fake_httpd_reset();
     onvif_fake_net_reset();
     onvif_fake_time_set(T_EPOCH);
-    g_gate = 1;
-    g_fps = 12;
-    g_ip_mode = 0;
+    g_gate         = 1;
+    g_fps          = 12;
+    g_ip_mode      = 0;
     g_ip_zero_once = 0;
 }
 
@@ -84,45 +99,42 @@ static esp_err_t post(httpd_uri_t *u, const char *action, httpd_req_t *r)
 {
     snprintf(g_body, sizeof(g_body),
              "<s:Envelope xmlns:s=\"http://www.w3.org/2003/05/soap-envelope\">"
-             "<s:Body>%s</s:Body></s:Envelope>", action);
+             "<s:Body>%s</s:Body></s:Envelope>",
+             action);
     return onvif_fake_httpd_invoke(u, g_body, strlen(g_body), r);
 }
 
 void test_service(void)
 {
-    httpd_req_t r;
-    httpd_uri_t *u;
+    httpd_req_t      r;
+    httpd_uri_t     *u;
     onvif_c_config_t cfg;
-    httpd_handle_t hd = onvif_fake_httpd_handle();
+    httpd_handle_t   hd = onvif_fake_httpd_handle();
 
     /* ---- onvif_c_start argument validation ---- */
     reset_env();
     cfg = base_cfg();
-    CHECK(onvif_c_start(NULL, &cfg) == ESP_ERR_INVALID_ARG,
-          "NULL httpd rejected");
-    CHECK(onvif_c_start(hd, NULL) == ESP_ERR_INVALID_ARG,
-          "NULL cfg rejected");
-    cfg = base_cfg(); cfg.serial = NULL;
-    CHECK(onvif_c_start(hd, &cfg) == ESP_ERR_INVALID_ARG,
-          "NULL serial rejected");
-    cfg = base_cfg(); cfg.uuid = NULL;
-    CHECK(onvif_c_start(hd, &cfg) == ESP_ERR_INVALID_ARG,
-          "NULL uuid rejected");
-    cfg = base_cfg(); cfg.ip = NULL;
-    CHECK(onvif_c_start(hd, &cfg) == ESP_ERR_INVALID_ARG,
-          "NULL ip rejected");
-    cfg = base_cfg(); cfg.stream_uri = NULL;
-    CHECK(onvif_c_start(hd, &cfg) == ESP_ERR_INVALID_ARG,
-          "NULL stream_uri rejected");
-    CHECK(onvif_fake_httpd_register_count() == 0,
-          "nothing registered on bad args");
+    CHECK(onvif_c_start(NULL, &cfg) == ESP_ERR_INVALID_ARG, "NULL httpd rejected");
+    CHECK(onvif_c_start(hd, NULL) == ESP_ERR_INVALID_ARG, "NULL cfg rejected");
+    cfg        = base_cfg();
+    cfg.serial = NULL;
+    CHECK(onvif_c_start(hd, &cfg) == ESP_ERR_INVALID_ARG, "NULL serial rejected");
+    cfg      = base_cfg();
+    cfg.uuid = NULL;
+    CHECK(onvif_c_start(hd, &cfg) == ESP_ERR_INVALID_ARG, "NULL uuid rejected");
+    cfg    = base_cfg();
+    cfg.ip = NULL;
+    CHECK(onvif_c_start(hd, &cfg) == ESP_ERR_INVALID_ARG, "NULL ip rejected");
+    cfg            = base_cfg();
+    cfg.stream_uri = NULL;
+    CHECK(onvif_c_start(hd, &cfg) == ESP_ERR_INVALID_ARG, "NULL stream_uri rejected");
+    CHECK(onvif_fake_httpd_register_count() == 0, "nothing registered on bad args");
 
     /* ---- happy start, no events ---- */
     reset_env();
-    cfg = base_cfg();   /* events_enabled == NULL */
+    cfg = base_cfg(); /* events_enabled == NULL */
     CHECK(onvif_c_start(hd, &cfg) == ESP_OK, "start OK");
-    CHECK(onvif_fake_httpd_register_count() == 2,
-          "device+media registered");
+    CHECK(onvif_fake_httpd_register_count() == 2, "device+media registered");
     CHECK(onvif_fake_httpd_find("/onvif/events_service") == NULL,
           "no events handler without events_enabled");
     CHECK(onvif_c_version() == ONVIF_C_VERSION, "version macro exported");
@@ -131,32 +143,26 @@ void test_service(void)
 
     /* GetSystemDateAndTime — deterministic via the fake clock */
     onvif_fake_time_set(T_EPOCH);
-    CHECK(post(u, "<tds:GetSystemDateAndTime/>", &r) == ESP_OK,
-          "date handler ok");
-    CHECK_SUB(r.resp, "<tds:GetSystemDateAndTimeResponse>",
-              "date response tag");
+    CHECK(post(u, "<tds:GetSystemDateAndTime/>", &r) == ESP_OK, "date handler ok");
+    CHECK_SUB(r.resp, "<tds:GetSystemDateAndTimeResponse>", "date response tag");
     CHECK_SUB(r.resp, "<tt:TZ>UTC</tt:TZ>", "date timezone");
     {
-        time_t t = T_EPOCH;
+        time_t    t = T_EPOCH;
         struct tm tm;
-        char exp[40];
+        char      exp[40];
         gmtime_r(&t, &tm);
         snprintf(exp, sizeof(exp), "<tt:Hour>%d</tt:Hour>", tm.tm_hour);
         CHECK_SUB(r.resp, exp, "date hour from fake clock");
     }
 
     /* GetDeviceInformation — defaults resolve for every optional field */
-    cfg = base_cfg();   /* manufacturer/model/hw/fw all NULL */
+    cfg = base_cfg(); /* manufacturer/model/hw/fw all NULL */
     CHECK(onvif_c_start(hd, &cfg) == ESP_OK, "restart with new cfg ok");
-    CHECK(post(u, "<tds:GetDeviceInformation/>", &r) == ESP_OK,
-          "info handler ok");
-    CHECK_SUB(r.resp, "<tds:Manufacturer>MiBee</tds:Manufacturer>",
-              "default manufacturer");
+    CHECK(post(u, "<tds:GetDeviceInformation/>", &r) == ESP_OK, "info handler ok");
+    CHECK_SUB(r.resp, "<tds:Manufacturer>MiBee</tds:Manufacturer>", "default manufacturer");
     CHECK_SUB(r.resp, "<tds:Model>MiBeeCam</tds:Model>", "default model");
-    CHECK_SUB(r.resp, "<tds:HardwareId>ESP32</tds:HardwareId>",
-              "default hardware id");
-    CHECK_SUB(r.resp, "<tds:SerialNumber>" T_SERIAL "</tds:SerialNumber>",
-              "serial from callback");
+    CHECK_SUB(r.resp, "<tds:HardwareId>ESP32</tds:HardwareId>", "default hardware id");
+    CHECK_SUB(r.resp, "<tds:SerialNumber>" T_SERIAL "</tds:SerialNumber>", "serial from callback");
     CHECK_SUB(r.resp, "GetDeviceInformationResponse", "info response tag");
 
     /* default WS-Discovery scopes built from the model */
@@ -165,7 +171,7 @@ void test_service(void)
     CHECK(!onvif_c_cfg_has_events(), "has_events false without callback");
 
     /* ---- capabilities variants (http_port plumbing end to end) ---- */
-    cfg = base_cfg();
+    cfg           = base_cfg();
     cfg.http_port = 8080;
     CHECK(onvif_c_start(hd, &cfg) == ESP_OK, "start with port 8080");
     CHECK(post(u, "<tds:GetCapabilities/>", &r) == ESP_OK, "caps handler ok");
@@ -173,87 +179,72 @@ void test_service(void)
               "caps device XAddr honors http_port");
     CHECK_SUB(r.resp, "http://" T_IP ":8080/onvif/media_service",
               "caps media XAddr honors http_port");
-    CHECK(strstr(r.resp, "events_service") == NULL,
-          "no events XAddr without events_enabled");
+    CHECK(strstr(r.resp, "events_service") == NULL, "no events XAddr without events_enabled");
 
-    cfg = base_cfg();
-    cfg.http_port = 8080;
+    cfg                = base_cfg();
+    cfg.http_port      = 8080;
     cfg.events_enabled = cb_gate;
     CHECK(onvif_c_start(hd, &cfg) == ESP_OK, "start with events");
-    CHECK(onvif_fake_httpd_find("/onvif/events_service") != NULL,
-          "events handler registered");
+    CHECK(onvif_fake_httpd_find("/onvif/events_service") != NULL, "events handler registered");
     CHECK(onvif_c_cfg_has_events(), "has_events true with callback");
     CHECK(post(u, "<tds:GetCapabilities/>", &r) == ESP_OK, "caps handler ok");
-    CHECK_SUB(r.resp, "http://" T_IP ":8080/onvif/events_service",
-              "events XAddr when enabled");
+    CHECK_SUB(r.resp, "http://" T_IP ":8080/onvif/events_service", "events XAddr when enabled");
 
-    cfg = base_cfg();
-    cfg.http_port = 8080;
+    cfg                = base_cfg();
+    cfg.http_port      = 8080;
     cfg.events_enabled = cb_gate;
-    cfg.scopes = "CUSTOM-SCOPES";
-    g_ip_mode = 1;   /* ip callback answers 0.0.0.0 */
+    cfg.scopes         = "CUSTOM-SCOPES";
+    g_ip_mode          = 1; /* ip callback answers 0.0.0.0 */
     CHECK(onvif_c_start(hd, &cfg) == ESP_OK, "start with placeholder ip");
     CHECK(post(u, "<tds:GetCapabilities/>", &r) == ESP_OK, "caps handler ok");
-    CHECK_SUB(r.resp, "http://0.0.0.0:8080/onvif/device_service",
-              "placeholder ip propagated");
-    CHECK(strcmp(onvif_c_cfg_scopes(), "CUSTOM-SCOPES") == 0,
-          "custom scopes override default");
+    CHECK_SUB(r.resp, "http://0.0.0.0:8080/onvif/device_service", "placeholder ip propagated");
+    CHECK(strcmp(onvif_c_cfg_scopes(), "CUSTOM-SCOPES") == 0, "custom scopes override default");
     g_ip_mode = 0;
     stop_env();
 
     /* ---- media service ---- */
     reset_env();
-    cfg = base_cfg();
-    cfg.frame_rate = NULL;   /* exercise the documented default (15) */
+    cfg            = base_cfg();
+    cfg.frame_rate = NULL; /* exercise the documented default (15) */
     CHECK(onvif_c_start(hd, &cfg) == ESP_OK, "media start ok");
     u = onvif_fake_httpd_find("/onvif/media_service");
     CHECK(u != NULL, "media handler found");
 
-    CHECK(post(u, "<trt:GetProfiles/>", &r) == ESP_OK,
-          "profiles handler ok (default fps)");
-    CHECK_SUB(r.resp, "<tt:FrameRateLimit>15</tt:FrameRateLimit>",
-              "default frame rate 15");
-    cfg = base_cfg();   /* frame_rate callback present */
+    CHECK(post(u, "<trt:GetProfiles/>", &r) == ESP_OK, "profiles handler ok (default fps)");
+    CHECK_SUB(r.resp, "<tt:FrameRateLimit>15</tt:FrameRateLimit>", "default frame rate 15");
+    cfg   = base_cfg(); /* frame_rate callback present */
     g_fps = 12;
     CHECK(onvif_c_start(hd, &cfg) == ESP_OK, "restart with frame_rate cb");
-    CHECK(post(u, "<trt:GetProfiles/>", &r) == ESP_OK,
-          "profiles handler ok (cb fps)");
-    CHECK_SUB(r.resp, "<tt:FrameRateLimit>12</tt:FrameRateLimit>",
-              "frame rate from callback");
+    CHECK(post(u, "<trt:GetProfiles/>", &r) == ESP_OK, "profiles handler ok (cb fps)");
+    CHECK_SUB(r.resp, "<tt:FrameRateLimit>12</tt:FrameRateLimit>", "frame rate from callback");
 
     CHECK(post(u, "<trt:GetStreamUri/>", &r) == ESP_OK, "stream uri handler ok");
-    CHECK_SUB(r.resp, "<tt:Uri>rtsp://" T_IP ":554/stream</tt:Uri>",
-              "stream uri from callback");
+    CHECK_SUB(r.resp, "<tt:Uri>rtsp://" T_IP ":554/stream</tt:Uri>", "stream uri from callback");
 
     /* GetSnapshotUri: derived URI follows http_port */
-    cfg = base_cfg();
-    cfg.http_port = 8080;   /* snapshot_uri NULL -> derived */
+    cfg           = base_cfg();
+    cfg.http_port = 8080; /* snapshot_uri NULL -> derived */
     CHECK(onvif_c_start(hd, &cfg) == ESP_OK, "start for derived snapshot");
     CHECK(post(u, "<trt:GetSnapshotUri/>", &r) == ESP_OK, "snapshot handler ok");
-    CHECK_SUB(r.resp, "http://" T_IP ":8080/api/capture",
-              "derived snapshot uri honors http_port");
+    CHECK_SUB(r.resp, "http://" T_IP ":8080/api/capture", "derived snapshot uri honors http_port");
     CHECK(post(u, "<trt:GetSnapshot/>", &r) == ESP_OK, "bare GetSnapshot ok");
-    CHECK_SUB(r.resp, "http://" T_IP ":8080/api/capture",
-              "GetSnapshot alias dispatches");
+    CHECK_SUB(r.resp, "http://" T_IP ":8080/api/capture", "GetSnapshot alias dispatches");
 
-    cfg = base_cfg();
+    cfg              = base_cfg();
     cfg.snapshot_uri = cb_snapshot_uri;
     CHECK(onvif_c_start(hd, &cfg) == ESP_OK, "start with snapshot callback");
     CHECK(post(u, "<trt:GetSnapshotUri/>", &r) == ESP_OK, "snapshot handler ok");
-    CHECK_SUB(r.resp, "<tt:Uri>http://" T_IP "/cap</tt:Uri>",
-              "explicit snapshot uri wins");
+    CHECK_SUB(r.resp, "<tt:Uri>http://" T_IP "/cap</tt:Uri>", "explicit snapshot uri wins");
 
     /* ---- faults and body edge cases ---- */
     CHECK(post(u, "<trt:GetVideoEncoderConfigurations/>", &r) == ESP_OK,
           "unknown media action handled");
     CHECK_SUB(r.resp, "ter:ActionNotSupported", "unknown media action fault");
 
-    CHECK(onvif_fake_httpd_invoke(u, NULL, 0, &r) == ESP_OK,
-          "empty body handled");
+    CHECK(onvif_fake_httpd_invoke(u, NULL, 0, &r) == ESP_OK, "empty body handled");
     CHECK_SUB(r.resp, "ter:ActionNotSupported", "empty body fault");
 
-    CHECK(onvif_fake_httpd_invoke(u, "x", 5000, &r) == ESP_OK,
-          "oversize body handled");
+    CHECK(onvif_fake_httpd_invoke(u, "x", 5000, &r) == ESP_OK, "oversize body handled");
     CHECK_SUB(r.resp, "ter:ActionNotSupported", "oversize body fault");
 
     onvif_fake_httpd_recv_fail_once();
@@ -261,19 +252,15 @@ void test_service(void)
     CHECK_SUB(r.resp, "ter:ActionNotSupported", "recv failure fault");
 
     u = onvif_fake_httpd_find("/onvif/device_service");
-    onvif_fake_httpd_recv_short_once(8);   /* body truncated to 8 bytes */
-    CHECK(post(u, "<tds:GetCapabilities/>", &r) == ESP_OK,
-          "short read handled");
+    onvif_fake_httpd_recv_short_once(8); /* body truncated to 8 bytes */
+    CHECK(post(u, "<tds:GetCapabilities/>", &r) == ESP_OK, "short read handled");
     CHECK_SUB(r.resp, "ter:ActionNotSupported", "short read falls to fault");
-    CHECK(strstr(r.resp, "GetCapabilitiesResponse") == NULL,
-          "short read loses the action");
+    CHECK(strstr(r.resp, "GetCapabilitiesResponse") == NULL, "short read loses the action");
 
-    CHECK(onvif_fake_httpd_invoke(u, "zzz", 3, &r) == ESP_OK,
-          "garbage body handled");
+    CHECK(onvif_fake_httpd_invoke(u, "zzz", 3, &r) == ESP_OK, "garbage body handled");
     CHECK_SUB(r.resp, "ter:ActionNotSupported", "garbage body fault");
 
-    CHECK(post(u, "<tds:GetUsers/>", &r) == ESP_OK,
-          "unknown device action handled");
+    CHECK(post(u, "<tds:GetUsers/>", &r) == ESP_OK, "unknown device action handled");
     CHECK_SUB(r.resp, "ter:ActionNotSupported", "unknown device action fault");
     stop_env();
 
@@ -281,31 +268,25 @@ void test_service(void)
     reset_env();
     cfg = base_cfg();
     onvif_fake_httpd_fail_register_once(ESP_ERR_HTTPD_HANDLER_EXISTS);
-    CHECK(onvif_c_start(hd, &cfg) == ESP_OK,
-          "HANDLER_EXISTS on first uri tolerated");
+    CHECK(onvif_c_start(hd, &cfg) == ESP_OK, "HANDLER_EXISTS on first uri tolerated");
     stop_env();
 
     reset_env();
     cfg = base_cfg();
     onvif_fake_httpd_fail_register_once(ESP_ERR_NO_MEM);
-    CHECK(onvif_c_start(hd, &cfg) == ESP_ERR_NO_MEM,
-          "hard registration failure propagates");
-    CHECK(onvif_fake_httpd_register_count() == 0,
-          "failed register stored nothing");
+    CHECK(onvif_c_start(hd, &cfg) == ESP_ERR_NO_MEM, "hard registration failure propagates");
+    CHECK(onvif_fake_httpd_register_count() == 0, "failed register stored nothing");
 
     reset_env();
-    cfg = base_cfg();
+    cfg                = base_cfg();
     cfg.events_enabled = cb_gate;
     onvif_fake_httpd_fail_register_nth(3, ESP_ERR_HTTPD_HANDLER_EXISTS);
-    CHECK(onvif_c_start(hd, &cfg) == ESP_OK,
-          "events HANDLER_EXISTS tolerated");
+    CHECK(onvif_c_start(hd, &cfg) == ESP_OK, "events HANDLER_EXISTS tolerated");
     stop_env();
 
     reset_env();
     cfg = base_cfg();
     onvif_fake_task_fail_create_once();
-    CHECK(onvif_c_start(hd, &cfg) == ESP_FAIL,
-          "discovery task creation failure propagates");
-    CHECK(onvif_fake_httpd_register_count() == 2,
-          "handlers stay registered when discovery fails");
+    CHECK(onvif_c_start(hd, &cfg) == ESP_FAIL, "discovery task creation failure propagates");
+    CHECK(onvif_fake_httpd_register_count() == 2, "handlers stay registered when discovery fails");
 }

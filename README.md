@@ -87,7 +87,7 @@ Everything the library ships is developed test-first and gated in CI:
 | --- | --- | --- |
 | Host tests | `tests/run.sh` | 212 checks: core golden bytes + the full ESP-IDF port layer driven through stubs |
 | Coverage | `tests/coverage.sh` | ≥80% line coverage over `core/` + `esp_idf/` (currently 95%) |
-| Style | `tools/check_style.sh` | clang-format clean (pinned `clang-format==18.1.8`, see `.clang-format`) |
+| Style | `tools/check_style.sh` | clang-format clean (pinned `clang-format==22.1.8`, see `.clang-format`) |
 | Hygiene | `tools/check-repo-hygiene.sh` | no junk/secret files tracked |
 
 The host harness (`tests/`) needs nothing but a C compiler and pthreads:

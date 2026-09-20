@@ -20,14 +20,22 @@
 const char *esp_err_to_name(esp_err_t err)
 {
     switch (err) {
-    case ESP_OK:                        return "ESP_OK";
-    case ESP_FAIL:                      return "ESP_FAIL";
-    case ESP_ERR_NO_MEM:                return "ESP_ERR_NO_MEM";
-    case ESP_ERR_INVALID_ARG:           return "ESP_ERR_INVALID_ARG";
-    case ESP_ERR_INVALID_STATE:         return "ESP_ERR_INVALID_STATE";
-    case ESP_ERR_NOT_SUPPORTED:         return "ESP_ERR_NOT_SUPPORTED";
-    case ESP_ERR_HTTPD_HANDLER_EXISTS:  return "ESP_ERR_HTTPD_HANDLER_EXISTS";
-    default:                            return "UNKNOWN";
+    case ESP_OK:
+        return "ESP_OK";
+    case ESP_FAIL:
+        return "ESP_FAIL";
+    case ESP_ERR_NO_MEM:
+        return "ESP_ERR_NO_MEM";
+    case ESP_ERR_INVALID_ARG:
+        return "ESP_ERR_INVALID_ARG";
+    case ESP_ERR_INVALID_STATE:
+        return "ESP_ERR_INVALID_STATE";
+    case ESP_ERR_NOT_SUPPORTED:
+        return "ESP_ERR_NOT_SUPPORTED";
+    case ESP_ERR_HTTPD_HANDLER_EXISTS:
+        return "ESP_ERR_HTTPD_HANDLER_EXISTS";
+    default:
+        return "UNKNOWN";
     }
 }
 
@@ -43,9 +51,18 @@ void *heap_caps_malloc(size_t size, unsigned int caps)
 
 static time_t g_now = 1750000000;
 
-void onvif_fake_time_set(time_t t)          { g_now = t; }
-void onvif_fake_time_advance(time_t s)      { g_now += s; }
-time_t onvif_fake_time_get(void)            { return g_now; }
+void onvif_fake_time_set(time_t t)
+{
+    g_now = t;
+}
+void onvif_fake_time_advance(time_t s)
+{
+    g_now += s;
+}
+time_t onvif_fake_time_get(void)
+{
+    return g_now;
+}
 
 time_t __wrap_time(void *t)
 {
@@ -69,25 +86,25 @@ static struct onvif_fake_httpd g_httpd;
 
 static struct {
     httpd_uri_t uri;
-    int used;
+    int         used;
 } g_uris[FAKE_HTTPD_MAX_URIS];
 
-static int g_fail_register_once;   /* error to return once, 0 = off */
-static int g_fail_register_nth;    /* ordinal of call to fail, 0 = off */
+static int g_fail_register_once; /* error to return once, 0 = off */
+static int g_fail_register_nth;  /* ordinal of call to fail, 0 = off */
 static int g_fail_register_err;
 static int g_register_calls;
-static int g_recv_short_once;      /* cap next recv, 0 = off        */
-static int g_recv_fail_once;       /* fail next recv, 0 = off       */
+static int g_recv_short_once; /* cap next recv, 0 = off        */
+static int g_recv_fail_once;  /* fail next recv, 0 = off       */
 
 void onvif_fake_httpd_reset(void)
 {
     memset(g_uris, 0, sizeof(g_uris));
     g_fail_register_once = 0;
-    g_fail_register_nth = 0;
-    g_fail_register_err = 0;
-    g_register_calls = 0;
-    g_recv_short_once = 0;
-    g_recv_fail_once = 0;
+    g_fail_register_nth  = 0;
+    g_fail_register_err  = 0;
+    g_register_calls     = 0;
+    g_recv_short_once    = 0;
+    g_recv_fail_once     = 0;
 }
 
 httpd_handle_t onvif_fake_httpd_handle(void)
@@ -130,7 +147,7 @@ esp_err_t httpd_register_uri_handler(httpd_handle_t hd, const httpd_uri_t *uri)
     (void)hd;
     g_register_calls++;
     if (g_fail_register_once) {
-        int err = g_fail_register_once;
+        int err              = g_fail_register_once;
         g_fail_register_once = 0;
         return (esp_err_t)err;
     }
@@ -147,7 +164,7 @@ esp_err_t httpd_register_uri_handler(httpd_handle_t hd, const httpd_uri_t *uri)
     }
     for (int i = 0; i < FAKE_HTTPD_MAX_URIS; i++) {
         if (!g_uris[i].used) {
-            g_uris[i].uri = *uri;
+            g_uris[i].uri  = *uri;
             g_uris[i].used = 1;
             return ESP_OK;
         }
@@ -201,13 +218,13 @@ void onvif_fake_httpd_recv_fail_once(void)
     g_recv_fail_once = 1;
 }
 
-esp_err_t onvif_fake_httpd_invoke(httpd_uri_t *u, const char *body,
-                                  size_t content_len, httpd_req_t *out_req)
+esp_err_t onvif_fake_httpd_invoke(httpd_uri_t *u, const char *body, size_t content_len,
+                                  httpd_req_t *out_req)
 {
     memset(out_req, 0, sizeof(*out_req));
     out_req->content_len = content_len;
     out_req->inject_body = body ? body : "";
-    out_req->inject_len = body ? strlen(body) : 0;
+    out_req->inject_len  = body ? strlen(body) : 0;
     return u->handler(out_req);
 }
 
@@ -217,16 +234,21 @@ esp_err_t onvif_fake_httpd_invoke(httpd_uri_t *u, const char *body,
 
 struct onvif_fake_task {
     pthread_t tid;
-    int alive;
+    int       alive;  /* thread created, may still be running */
+    int       joined; /* pthread_join completed */
 };
 
 struct task_spawn {
     TaskFunction_t fn;
-    void *arg;
+    void          *arg;
 };
 
-static TaskHandle_t g_last_task;
-static int g_fail_create_once;
+/* Registry of allocated handles so drain() can join/free every task
+ * exactly once, regardless of start/stop ordering. */
+#define FAKE_TASK_MAX 16
+static struct onvif_fake_task *g_tasks[FAKE_TASK_MAX];
+static TaskHandle_t            g_last_task;
+static int                     g_fail_create_once;
 
 static void *task_trampoline(void *p)
 {
@@ -236,35 +258,57 @@ static void *task_trampoline(void *p)
     return NULL;
 }
 
-BaseType_t xTaskCreatePinnedToCore(TaskFunction_t fn, const char *name,
-                                   uint32_t stack, void *arg,
-                                   UBaseType_t prio, TaskHandle_t *handle,
-                                   BaseType_t core)
+BaseType_t xTaskCreatePinnedToCore(TaskFunction_t fn, const char *name, uint32_t stack, void *arg,
+                                   UBaseType_t prio, TaskHandle_t *handle, BaseType_t core)
 {
-    (void)name; (void)stack; (void)prio; (void)core;
+    (void)name;
+    (void)stack;
+    (void)prio;
+    (void)core;
     if (g_fail_create_once) {
         g_fail_create_once = 0;
         return pdFAIL;
     }
     struct onvif_fake_task *t = calloc(1, sizeof(*t));
-    struct task_spawn *s = malloc(sizeof(*s));
+    struct task_spawn      *s = malloc(sizeof(*s));
     if (!t || !s) {
         free(t);
         free(s);
         return pdFAIL;
     }
-    s->fn = fn;
-    s->arg = arg;
-    t->alive = 1;
-    if (pthread_create(&t->tid, NULL, task_trampoline, s) != 0) {
+    /* Find a registry slot BEFORE publishing the handle. */
+    int slot = -1;
+    for (int i = 0; i < FAKE_TASK_MAX; i++) {
+        if (!g_tasks[i]) {
+            slot = i;
+            break;
+        }
+    }
+    if (slot < 0) {
         free(t);
         free(s);
         return pdFAIL;
     }
+    s->fn    = fn;
+    s->arg   = arg;
+    t->alive = 1;
+    /* Real FreeRTOS publishes the handle before the task can run; doing
+     * it after pthread_create lets the new thread observe a NULL/cleared
+     * handle and exit instantly (a classic fake-induced race). */
+    g_tasks[slot] = t;
+    g_last_task   = t;
     if (handle) {
         *handle = t;
     }
-    g_last_task = t;
+    if (pthread_create(&t->tid, NULL, task_trampoline, s) != 0) {
+        g_tasks[slot] = NULL;
+        if (handle) {
+            *handle = NULL;
+        }
+        free(t);
+        free(s);
+        return pdFAIL;
+    }
     return pdPASS;
 }
 
@@ -303,12 +347,14 @@ void onvif_fake_task_join(TaskHandle_t t)
 
 void onvif_fake_task_drain(void)
 {
-    /* Single-task harness: joining the last created task is enough. */
-    onvif_fake_task_join(g_last_task);
-    if (g_last_task) {
-        free(g_last_task);
-        g_last_task = NULL;
+    for (int i = 0; i < FAKE_TASK_MAX; i++) {
+        if (g_tasks[i]) {
+            onvif_fake_task_join(g_tasks[i]);
+            free(g_tasks[i]);
+            g_tasks[i] = NULL;
+        }
     }
+    g_last_task = NULL;
 }
 
 /* ------------------------------------------------------------------ */
@@ -352,35 +398,35 @@ BaseType_t xSemaphoreGive(SemaphoreHandle_t mtx)
 /*  Virtual UDP network                                                */
 /* ------------------------------------------------------------------ */
 
-#define FAKE_NET_MAX_FDS    4
-#define FAKE_NET_RX_QUEUE   8
-#define FAKE_NET_MAX_SENDS  256
-#define FAKE_NET_DGRAM_MAX  2200
+#define FAKE_NET_MAX_FDS   4
+#define FAKE_NET_RX_QUEUE  8
+#define FAKE_NET_MAX_SENDS 256
+#define FAKE_NET_DGRAM_MAX 2200
 
 struct fake_dgram {
-    int len;
-    char data[FAKE_NET_DGRAM_MAX];
+    int      len;
+    char     data[FAKE_NET_DGRAM_MAX];
     uint32_t from_raw;
     uint16_t from_port;
 };
 
 struct fake_tx {
-    int len;
-    char data[FAKE_NET_DGRAM_MAX];
+    int      len;
+    char     data[FAKE_NET_DGRAM_MAX];
     uint32_t dest_raw;
     uint16_t dest_port;
 };
 
 struct fake_fd {
-    int used;
-    int bound;
+    int               used;
+    int               bound;
     struct fake_dgram rx[FAKE_NET_RX_QUEUE];
-    int rx_head, rx_count;
+    int               rx_head, rx_count;
 };
 
 static struct fake_fd g_fds[FAKE_NET_MAX_FDS];
 static struct fake_tx g_sends[FAKE_NET_MAX_SENDS];
-static int g_send_count;
+static int            g_send_count;
 
 static int g_fail_socket_once;
 static int g_fail_bind_once;
@@ -390,19 +436,30 @@ void onvif_fake_net_reset(void)
 {
     memset(g_fds, 0, sizeof(g_fds));
     memset(g_sends, 0, sizeof(g_sends));
-    g_send_count = 0;
-    g_fail_socket_once = 0;
-    g_fail_bind_once = 0;
+    g_send_count           = 0;
+    g_fail_socket_once     = 0;
+    g_fail_bind_once       = 0;
     g_fail_membership_once = 0;
 }
 
-void onvif_fake_net_fail_socket_once(void)     { g_fail_socket_once = 1; }
-void onvif_fake_net_fail_bind_once(void)       { g_fail_bind_once = 1; }
-void onvif_fake_net_fail_membership_once(void) { g_fail_membership_once = 1; }
+void onvif_fake_net_fail_socket_once(void)
+{
+    g_fail_socket_once = 1;
+}
+void onvif_fake_net_fail_bind_once(void)
+{
+    g_fail_bind_once = 1;
+}
+void onvif_fake_net_fail_membership_once(void)
+{
+    g_fail_membership_once = 1;
+}
 
 int onvif_fake_socket(int domain, int type, int protocol)
 {
-    (void)domain; (void)type; (void)protocol;
+    (void)domain;
+    (void)type;
+    (void)protocol;
     if (g_fail_socket_once) {
         g_fail_socket_once = 0;
         return -1;
@@ -432,23 +489,22 @@ int onvif_fake_bind(int fd, const struct sockaddr *addr, socklen_t len)
     return 0;
 }
 
-int onvif_fake_setsockopt(int fd, int level, int optname, const void *optval,
-                          socklen_t len)
+int onvif_fake_setsockopt(int fd, int level, int optname, const void *optval, socklen_t len)
 {
-    (void)optval; (void)len;
+    (void)optval;
+    (void)len;
     if (fd < 0 || fd >= FAKE_NET_MAX_FDS || !g_fds[fd].used) {
         return -1;
     }
-    if (level == IPPROTO_IP && optname == IP_ADD_MEMBERSHIP &&
-        g_fail_membership_once) {
+    if (level == IPPROTO_IP && optname == IP_ADD_MEMBERSHIP && g_fail_membership_once) {
         g_fail_membership_once = 0;
         return -1;
     }
     return 0;
 }
 
-int onvif_fake_recvfrom(int fd, void *buf, size_t len, int flags,
-                        struct sockaddr *from, socklen_t *fromlen)
+int onvif_fake_recvfrom(int fd, void *buf, size_t len, int flags, struct sockaddr *from,
+                        socklen_t *fromlen)
 {
     (void)flags;
     if (fd < 0 || fd >= FAKE_NET_MAX_FDS || !g_fds[fd].used) {
@@ -456,46 +512,45 @@ int onvif_fake_recvfrom(int fd, void *buf, size_t len, int flags,
     }
     struct fake_fd *f = &g_fds[fd];
     if (f->rx_count == 0) {
-        usleep(2000);   /* emulate the 5 s SO_RCVTIMEO at test pace */
+        usleep(2000); /* emulate the 5 s SO_RCVTIMEO at test pace */
         return 0;
     }
     struct fake_dgram *d = &f->rx[f->rx_head];
-    size_t n = (size_t)d->len < len ? (size_t)d->len : len;
+    size_t             n = (size_t)d->len < len ? (size_t)d->len : len;
     memcpy(buf, d->data, n);
     f->rx_head = (f->rx_head + 1) % FAKE_NET_RX_QUEUE;
     f->rx_count--;
     if (from && fromlen && *fromlen >= sizeof(struct sockaddr_in)) {
         struct sockaddr_in *sin = (struct sockaddr_in *)(void *)from;
-        sin->sin_family = AF_INET;
-        sin->sin_port = htons(d->from_port);
-        sin->sin_addr.s_addr = d->from_raw;
-        *fromlen = sizeof(struct sockaddr_in);
+        sin->sin_family         = AF_INET;
+        sin->sin_port           = htons(d->from_port);
+        sin->sin_addr.s_addr    = d->from_raw;
+        *fromlen                = sizeof(struct sockaddr_in);
     }
     return (int)n;
 }
 
-int onvif_fake_sendto(int fd, const void *buf, size_t len, int flags,
-                      const struct sockaddr *to, socklen_t tolen)
+int onvif_fake_sendto(int fd, const void *buf, size_t len, int flags, const struct sockaddr *to,
+                      socklen_t tolen)
 {
-    (void)flags; (void)tolen;
+    (void)flags;
+    (void)tolen;
     if (fd < 0 || fd >= FAKE_NET_MAX_FDS || !g_fds[fd].used) {
         return -1;
     }
-    if (g_send_count >= FAKE_NET_MAX_SENDS ||
-        len > FAKE_NET_DGRAM_MAX) {
+    if (g_send_count >= FAKE_NET_MAX_SENDS || len > FAKE_NET_DGRAM_MAX) {
         return -1;
     }
     struct fake_tx *s = &g_sends[g_send_count];
     memcpy(s->data, buf, len);
     s->len = (int)len;
     if (to && tolen >= sizeof(struct sockaddr_in)) {
-        const struct sockaddr_in *sin =
-            (const struct sockaddr_in *)(const void *)to;
-        s->dest_port = ntohs(sin->sin_port);
-        s->dest_raw = sin->sin_addr.s_addr;
+        const struct sockaddr_in *sin = (const struct sockaddr_in *)(const void *)to;
+        s->dest_port                  = ntohs(sin->sin_port);
+        s->dest_raw                   = sin->sin_addr.s_addr;
     } else {
         s->dest_port = 0;
-        s->dest_raw = 0;
+        s->dest_raw  = 0;
     }
     g_send_count++;
     return (int)len;
@@ -510,8 +565,7 @@ int onvif_fake_close(int fd)
     return 0;
 }
 
-void onvif_fake_net_inject(const char *data, const char *from_ip,
-                           unsigned from_port)
+void onvif_fake_net_inject(const char *data, const char *from_ip, unsigned from_port)
 {
     struct fake_dgram d;
     memset(&d, 0, sizeof(d));
@@ -520,7 +574,7 @@ void onvif_fake_net_inject(const char *data, const char *from_ip,
         d.len = FAKE_NET_DGRAM_MAX;
     }
     memcpy(d.data, data, (size_t)d.len);
-    d.from_raw = inet_addr(from_ip);
+    d.from_raw  = inet_addr(from_ip);
     d.from_port = (uint16_t)from_port;
 
     for (int i = 0; i < FAKE_NET_MAX_FDS; i++) {
@@ -528,7 +582,7 @@ void onvif_fake_net_inject(const char *data, const char *from_ip,
         if (!f->used || f->rx_count == FAKE_NET_RX_QUEUE) {
             continue;
         }
-        int tail = (f->rx_head + f->rx_count) % FAKE_NET_RX_QUEUE;
+        int tail    = (f->rx_head + f->rx_count) % FAKE_NET_RX_QUEUE;
         f->rx[tail] = d;
         f->rx_count++;
     }
@@ -541,13 +595,12 @@ int onvif_fake_net_send_count(void)
 
 static void raw_to_ip(uint32_t raw, char *out, size_t n)
 {
-    snprintf(out, n, "%u.%u.%u.%u",
-             (raw >> 24) & 0xFFu, (raw >> 16) & 0xFFu,
-             (raw >> 8) & 0xFFu, raw & 0xFFu);
+    snprintf(out, n, "%u.%u.%u.%u", (raw >> 24) & 0xFFu, (raw >> 16) & 0xFFu, (raw >> 8) & 0xFFu,
+             raw & 0xFFu);
 }
 
-int onvif_fake_net_send_get(int idx, char *buf, size_t n, char *dest_ip,
-                            size_t ipn, unsigned *dest_port)
+int onvif_fake_net_send_get(int idx, char *buf, size_t n, char *dest_ip, size_t ipn,
+                            unsigned *dest_port)
 {
     if (idx < 0 || idx >= g_send_count) {
         return -1;
@@ -572,8 +625,7 @@ int onvif_fake_net_wait_send(const char *needle, int timeout_ms)
     char scratch[FAKE_NET_DGRAM_MAX];
     for (int waited = 0; waited <= timeout_ms; waited += 10) {
         for (int i = 0; i < g_send_count; i++) {
-            onvif_fake_net_send_get(i, scratch, sizeof(scratch), NULL, 0,
-                                    NULL);
+            onvif_fake_net_send_get(i, scratch, sizeof(scratch), NULL, 0, NULL);
             if (strstr(scratch, needle)) {
                 return i;
             }
@@ -591,8 +643,8 @@ int onvif_fake_net_wait_send(const char *needle, int timeout_ms)
 in_addr_t inet_addr(const char *cp)
 {
     unsigned a = 0, b = 0, c = 0, d = 0;
-    if (sscanf(cp, "%u.%u.%u.%u", &a, &b, &c, &d) != 4 ||
-        a > 255 || b > 255 || c > 255 || d > 255) {
+    if (sscanf(cp, "%u.%u.%u.%u", &a, &b, &c, &d) != 4 || a > 255 || b > 255 || c > 255 ||
+        d > 255) {
         return htonl(INADDR_ANY);
     }
     return (in_addr_t)((a << 24) | (b << 16) | (c << 8) | d);
@@ -601,8 +653,8 @@ in_addr_t inet_addr(const char *cp)
 char *inet_ntoa(struct in_addr in)
 {
     static char bufs[4][16];
-    static int rot;
-    char *buf = bufs[rot++ & 3];
+    static int  rot;
+    char       *buf = bufs[rot++ & 3];
     raw_to_ip(in.s_addr, buf, sizeof(bufs[0]));
     return buf;
 }

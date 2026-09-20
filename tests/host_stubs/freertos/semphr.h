@@ -11,7 +11,7 @@
 typedef struct onvif_fake_mutex *SemaphoreHandle_t;
 
 SemaphoreHandle_t xSemaphoreCreateMutex(void);
-BaseType_t xSemaphoreTake(SemaphoreHandle_t mtx, UBaseType_t ticks);
-BaseType_t xSemaphoreGive(SemaphoreHandle_t mtx);
+BaseType_t        xSemaphoreTake(SemaphoreHandle_t mtx, UBaseType_t ticks);
+BaseType_t        xSemaphoreGive(SemaphoreHandle_t mtx);
 
 #endif /* STUB_SEMPHR_H */

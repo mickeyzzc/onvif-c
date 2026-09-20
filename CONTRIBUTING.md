@@ -14,7 +14,7 @@
    - `tests/coverage.sh` — line coverage of `core/` + `esp_idf/` stays
      ≥80%; new logic ships with tests or waits
    - `tools/check_style.sh` — clang-format clean; `tools/format.sh` fixes
-     (pin `clang-format==18.1.8` to match CI exactly)
+     (pin `clang-format==22.1.8` to match CI exactly)
    - `tools/check-repo-hygiene.sh`
 
 ## Setup
