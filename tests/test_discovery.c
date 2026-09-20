@@ -222,6 +222,25 @@ void test_discovery(void)
         onvif_fake_task_drain();
     }
 
+    /* oversized scopes would overflow the 2048-byte stack buffer: no
+     * Hello and no ProbeMatches may leave the board (#6 stack path) */
+    onvif_fake_httpd_reset();
+    onvif_fake_net_reset();
+    {
+        static char big_scopes[4000];
+        memset(big_scopes, 'S', sizeof(big_scopes) - 1);
+        big_scopes[sizeof(big_scopes) - 1] = '\0';
+        onvif_c_config_t cfg_big           = disco_cfg();
+        cfg_big.scopes                     = big_scopes;
+        CHECK(onvif_c_start(hd, &cfg_big) == ESP_OK, "start with huge scopes");
+        usleep(150000); /* initial + periodic Hello windows */
+        onvif_fake_net_inject(probe_body("urn:uuid:probe-big"), "192.0.2.99", 5010);
+        usleep(150000);
+        CHECK(onvif_fake_net_send_count() == 0, "truncated discovery frames are never sent");
+        onvif_c_stop();
+        onvif_fake_task_drain();
+    }
+
     /* stop -> start cycle creates a fresh task */
     onvif_fake_httpd_reset();
     onvif_fake_net_reset();

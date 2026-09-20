@@ -245,6 +245,11 @@ void test_events(void)
     CHECK(post_body(u, body_create(), &r) == ESP_OK, "events recv failure handled");
     CHECK_SUB(r.resp, "ter:ActionNotSupported", "events recv failure fault");
 
+    /* partial first recv must be reassembled across recv() calls (#7) */
+    onvif_fake_httpd_recv_short_once(20);
+    CHECK(post_body(u, body_create(), &r) == ESP_OK, "events partial read handled");
+    CHECK_SUB(r.resp, "CreatePullPointSubscriptionResponse", "events partial body reassembled");
+
     /* non-default http_port lands in the subscription address */
     {
         onvif_c_config_t cfg8 = ev_cfg(8080);

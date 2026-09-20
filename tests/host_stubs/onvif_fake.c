@@ -179,14 +179,19 @@ int httpd_req_recv(httpd_req_t *r, char *buf, size_t buf_len)
         g_recv_fail_once = 0;
         return -1;
     }
-    size_t n = r->inject_len < buf_len ? r->inject_len : buf_len;
+    /* Serve the injected stream from where the last call left off, so a
+     * handler that loops over recv() (as required by #7) reassembles the
+     * body; a one-shot cap simulates a short TCP segment. */
+    size_t avail = r->inject_len - r->inject_off;
+    size_t n     = avail < buf_len ? avail : buf_len;
     if (g_recv_short_once > 0) {
         if ((size_t)g_recv_short_once < n) {
             n = (size_t)g_recv_short_once;
         }
         g_recv_short_once = 0;
     }
-    memcpy(buf, r->inject_body, n);
+    memcpy(buf, r->inject_body + r->inject_off, n);
+    r->inject_off += n;
     return (int)n;
 }
 
