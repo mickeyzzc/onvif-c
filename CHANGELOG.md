@@ -24,7 +24,7 @@ coverage/style gates are enforced in CI.
 - **Coverage gate** `tests/coverage.sh`: ≥80% lines over `core/` +
   `esp_idf/` (currently 95%), CI-enforced.
 - **Style gate** `tools/check_style.sh` + `.clang-format`
-  (pinned clang-format 18.1.8), CI-enforced; `tools/format.sh` to apply.
+  (pinned clang-format 22.1.8), CI-enforced; `tools/format.sh` to apply.
 - Pre-commit hook now runs style (when clang-format is available) and the
   full host suites; `tools/setup-hooks.sh` installs it.
 
