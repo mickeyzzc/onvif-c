@@ -36,7 +36,7 @@ Vendor the tree (e.g. `components/onvif-c`), add `onvif-c` to main's
 #include "onvif_c.h"
 
 static const char *my_stream_uri(void) {
-    return "rtsp://192.168.63.134:554/stream";   /* or http://ip:81/stream */
+    return "rtsp://192.0.2.134:554/stream";   /* or http://ip:81/stream */
 }
 
 void app_onvif_start(httpd_handle_t httpd) {

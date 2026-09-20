@@ -33,7 +33,7 @@ Pull-Point 事件把相机交给 NVR，零第三方依赖，代码占用 ~10 KB�
 #include "onvif_c.h"
 
 static const char *my_stream_uri(void) {
-    return "rtsp://192.168.63.134:554/stream";   /* 或 http://ip:81/stream */
+    return "rtsp://192.0.2.134:554/stream";   /* 或 http://ip:81/stream */
 }
 
 void app_onvif_start(httpd_handle_t httpd) {

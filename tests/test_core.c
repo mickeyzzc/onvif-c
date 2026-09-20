@@ -99,13 +99,13 @@ static const char *G_CAPS_NOEV =
     "<tds:GetCapabilitiesResponse>"
     "<tds:Capabilities>"
     "<tt:Device>"
-    "<tt:XAddr>http://192.168.63.134:80/onvif/device_service</tt:XAddr>"
+    "<tt:XAddr>http://192.0.2.134:80/onvif/device_service</tt:XAddr>"
     "</tt:Device>"
     "<tt:Media>"
-    "<tt:XAddr>http://192.168.63.134:80/onvif/media_service</tt:XAddr>"
+    "<tt:XAddr>http://192.0.2.134:80/onvif/media_service</tt:XAddr>"
     "</tt:Media>"
     "<tt:Analytics>"
-    "<tt:XAddr>http://192.168.63.134:80/onvif/analytics_service</tt:XAddr>"
+    "<tt:XAddr>http://192.0.2.134:80/onvif/analytics_service</tt:XAddr>"
     "</tt:Analytics>"
     "</tds:Capabilities>"
     "</tds:GetCapabilitiesResponse>"
@@ -121,7 +121,7 @@ static const char *G_STREAM_URI =
     "<soap:Body>"
     "<trt:GetStreamUriResponse>"
     "<trt:MediaUri>"
-    "<tt:Uri>rtsp://192.168.63.134:554/stream</tt:Uri>"
+    "<tt:Uri>rtsp://192.0.2.134:554/stream</tt:Uri>"
     "<tt:InvalidAfterConnect>false</tt:InvalidAfterConnect>"
     "<tt:InvalidAfterReboot>false</tt:InvalidAfterReboot>"
     "<tt:Timeout>PT10S</tt:Timeout>"
@@ -188,7 +188,7 @@ static const char *G_PROBE_MATCHES_HEAD =
     "</wsa:EndpointReference>"
     "<wsd:Types>tns:NetworkVideoTransmitter</wsd:Types>"
     "<wsd:Scopes>SCOPEBODY</wsd:Scopes>"
-    "<wsd:XAddrs>http://192.168.63.134:80/onvif/device_service</wsd:XAddrs>"
+    "<wsd:XAddrs>http://192.0.2.134:80/onvif/device_service</wsd:XAddrs>"
     "<wsd:MetadataVersion>2</wsd:MetadataVersion>"
     "</wsd:ProbeMatch>"
     "</wsd:ProbeMatches>"
@@ -208,11 +208,11 @@ static void test_device_service_xml(void)
                                  "v0.1.0", "aabbccddeeff", "ESP32-S3");
     CHECK_STR(g, G_DEVICE_INFO, "GetDeviceInformation golden");
 
-    int n = onvif_xml_capabilities(g, sizeof(g), "192.168.63.134", false);
+    int n = onvif_xml_capabilities(g, sizeof(g), "192.0.2.134", false);
     CHECK(n > 0 && (size_t)n < sizeof(g), "capabilities fits");
     CHECK_STR(g, G_CAPS_NOEV, "GetCapabilities (no events) golden");
 
-    n = onvif_xml_capabilities(g, sizeof(g), "192.168.63.134", true);
+    n = onvif_xml_capabilities(g, sizeof(g), "192.0.2.134", true);
     CHECK(strstr(g, "/onvif/events_service") != NULL,
           "capabilities advertises events when enabled");
     CHECK(strstr(g, "<tt:Events>") != NULL, "events element present");
@@ -221,11 +221,11 @@ static void test_device_service_xml(void)
     CHECK(n > 0 && strstr(g, "<tt:FrameRateLimit>12</tt:FrameRateLimit>"),
           "GetProfiles embeds frame rate");
 
-    onvif_xml_stream_uri(g, sizeof(g), "rtsp://192.168.63.134:554/stream");
+    onvif_xml_stream_uri(g, sizeof(g), "rtsp://192.0.2.134:554/stream");
     CHECK_STR(g, G_STREAM_URI, "GetStreamUri golden");
 
-    n = onvif_xml_snapshot_uri(g, sizeof(g), "http://192.168.63.134:80/api/capture");
-    CHECK(strstr(g, "<tt:Uri>http://192.168.63.134:80/api/capture</tt:Uri>") != NULL,
+    n = onvif_xml_snapshot_uri(g, sizeof(g), "http://192.0.2.134:80/api/capture");
+    CHECK(strstr(g, "<tt:Uri>http://192.0.2.134:80/api/capture</tt:Uri>") != NULL,
           "GetSnapshotUri embeds URI");
 
     onvif_xml_fault_action_not_supported(g, sizeof(g));
@@ -235,10 +235,10 @@ static void test_device_service_xml(void)
 static void test_events_xml(void)
 {
     int n = onvif_xml_create_pull_point_response(
-        g, sizeof(g), "192.168.63.134", "2026-09-20T07:42:13Z",
+        g, sizeof(g), "192.0.2.134", "2026-09-20T07:42:13Z",
         "2026-09-20T08:42:13Z");
     CHECK(n > 0 && strstr(g, "CreatePullPointSubscriptionResponse") &&
-          strstr(g, "http://192.168.63.134:80/onvif/events_service") &&
+          strstr(g, "http://192.0.2.134:80/onvif/events_service") &&
           strstr(g, "<wsnt:TerminationTime>2026-09-20T08:42:13Z"),
           "CreatePullPointSubscription shape");
 
@@ -287,16 +287,16 @@ static void test_probe(void)
           "missing MessageID rejected");
 
     int n = onvif_probe_build_matches(g, sizeof(g), "urn:uuid:probe-123",
-                                      "TESTUUID", "192.168.63.134", "SCOPEBODY");
+                                      "TESTUUID", "192.0.2.134", "SCOPEBODY");
     CHECK(n > 0 && (size_t)n < sizeof(g), "ProbeMatches fits");
     CHECK_STR(g, G_PROBE_MATCHES_HEAD, "ProbeMatches golden");
 
     n = onvif_probe_build_matches(g, sizeof(g), NULL, "TESTUUID",
-                                  "192.168.63.134", "SCOPEBODY");
+                                  "192.0.2.134", "SCOPEBODY");
     CHECK(strstr(g, "<wsa:RelatesTo></wsa:RelatesTo>") != NULL,
           "missing RelatesTo becomes empty element");
 
-    n = onvif_probe_build_hello(g, sizeof(g), "TESTUUID", "192.168.63.134",
+    n = onvif_probe_build_hello(g, sizeof(g), "TESTUUID", "192.0.2.134",
                                 "SCOPEBODY");
     CHECK(n > 0 && strstr(g, "<wsd:Hello>") &&
           strstr(g, "discovery/Hello</wsa:Action>") &&
