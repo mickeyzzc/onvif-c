@@ -54,6 +54,21 @@ static const char *cb_snapshot_uri(void)
 {
     return "http://" T_IP "/cap";
 }
+
+/* #6 fixtures: integrator strings long enough to overflow a 4096-byte
+ * response buffer (would-be length >> actual bytes). */
+static const char *cb_stream_uri_huge(void)
+{
+    static char uri[5000];
+    memset(uri, 'u', sizeof(uri) - 1);
+    uri[sizeof(uri) - 1] = '\0';
+    return uri;
+}
+
+static const char *cb_snapshot_uri_huge(void)
+{
+    return cb_stream_uri_huge();
+}
 static uint8_t cb_frame_rate(void)
 {
     return (uint8_t)g_fps;
@@ -253,17 +268,47 @@ void test_service(void)
     CHECK(post(u, "<trt:GetProfiles/>", &r) == ESP_OK, "recv failure handled");
     CHECK_SUB(r.resp, "ter:ActionNotSupported", "recv failure fault");
 
+    /* a short first recv (one TCP segment) must be reassembled across
+     * recv() calls, not degrade to a fault (#7) */
     u = onvif_fake_httpd_find("/onvif/device_service");
-    onvif_fake_httpd_recv_short_once(8); /* body truncated to 8 bytes */
-    CHECK(post(u, "<tds:GetCapabilities/>", &r) == ESP_OK, "short read handled");
-    CHECK_SUB(r.resp, "ter:ActionNotSupported", "short read falls to fault");
-    CHECK(strstr(r.resp, "GetCapabilitiesResponse") == NULL, "short read loses the action");
+    onvif_fake_httpd_recv_short_once(8);
+    CHECK(post(u, "<tds:GetCapabilities/>", &r) == ESP_OK, "partial read handled");
+    CHECK_SUB(r.resp, "GetCapabilitiesResponse", "partial body reassembled");
 
     CHECK(onvif_fake_httpd_invoke(u, "zzz", 3, &r) == ESP_OK, "garbage body handled");
     CHECK_SUB(r.resp, "ter:ActionNotSupported", "garbage body fault");
 
     CHECK(post(u, "<tds:GetUsers/>", &r) == ESP_OK, "unknown device action handled");
     CHECK_SUB(r.resp, "ter:ActionNotSupported", "unknown device action fault");
+
+    /* oversized integrator strings would overflow the response buffer: the
+     * builder's would-be length is NOT a byte count — must fault, never
+     * transmit past the buffer (#6; would be an ASan heap over-read) */
+    {
+        static char big[5000];
+        memset(big, 'M', sizeof(big) - 1);
+        big[sizeof(big) - 1] = '\0';
+        cfg                  = base_cfg();
+        cfg.model            = big;
+        CHECK(onvif_c_start(hd, &cfg) == ESP_OK, "start with oversized model");
+        CHECK(post(u, "<tds:GetDeviceInformation/>", &r) == ESP_OK, "oversized model handled");
+        CHECK_SUB(r.resp, "ter:ActionNotSupported",
+                  "oversized model faults instead of over-reading");
+        CHECK(r.resp_len < FAKE_HTTPD_RESP_MAX, "response stays bounded");
+    }
+    {
+        cfg              = base_cfg();
+        cfg.stream_uri   = cb_stream_uri_huge;
+        cfg.snapshot_uri = cb_snapshot_uri_huge;
+        CHECK(onvif_c_start(hd, &cfg) == ESP_OK, "start with oversized uris");
+        u = onvif_fake_httpd_find("/onvif/media_service");
+        CHECK(post(u, "<trt:GetStreamUri/>", &r) == ESP_OK, "oversized stream uri handled");
+        CHECK_SUB(r.resp, "ter:ActionNotSupported",
+                  "oversized stream uri faults instead of over-reading");
+        CHECK(post(u, "<trt:GetSnapshotUri/>", &r) == ESP_OK, "oversized snapshot uri handled");
+        CHECK_SUB(r.resp, "ter:ActionNotSupported",
+                  "oversized snapshot uri faults instead of over-reading");
+    }
     stop_env();
 
     /* ---- registration failure paths ---- */
