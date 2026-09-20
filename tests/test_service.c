@@ -162,6 +162,8 @@ void test_service(void)
     CHECK_SUB(r.resp, "<tds:Manufacturer>MiBee</tds:Manufacturer>", "default manufacturer");
     CHECK_SUB(r.resp, "<tds:Model>MiBeeCam</tds:Model>", "default model");
     CHECK_SUB(r.resp, "<tds:HardwareId>ESP32</tds:HardwareId>", "default hardware id");
+    CHECK_SUB(r.resp, "<tds:FirmwareVersion>v0.1.0</tds:FirmwareVersion>",
+              "default firmware version");
     CHECK_SUB(r.resp, "<tds:SerialNumber>" T_SERIAL "</tds:SerialNumber>", "serial from callback");
     CHECK_SUB(r.resp, "GetDeviceInformationResponse", "info response tag");
 
