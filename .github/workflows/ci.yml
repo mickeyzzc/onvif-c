@@ -37,19 +37,19 @@ jobs:
       - name: Build component in a throwaway project
         shell: bash
         run: |
-          . $IDF_PATH/export.sh >/dev/null
+          set -x
+          . "$IDF_PATH/export.sh" 2>&1 | tail -1
           # EXTRA_COMPONENT_DIRS must name a dir CONTAINING the component dir,
           # and be set before project().
           mkdir -p /tmp/comps /tmp/probe/main
           cp -r "$GITHUB_WORKSPACE" /tmp/comps/onvif-c
           cd /tmp/probe
-          cat > CMakeLists.txt <<CMAKE
-          cmake_minimum_required(VERSION 3.16)
-          include($ENV{IDF_PATH}/tools/cmake/project.cmake)
-          set(EXTRA_COMPONENT_DIRS "/tmp/comps")
-          project(onvif_c_probe)
-          CMAKE
+          printf '%s\n' \
+            'cmake_minimum_required(VERSION 3.16)' \
+            'include($ENV{IDF_PATH}/tools/cmake/project.cmake)' \
+            'set(EXTRA_COMPONENT_DIRS "/tmp/comps")' \
+            'project(onvif_c_probe)' > CMakeLists.txt
           echo 'int app_main(void){return 0;}' > main/main.c
           echo 'idf_component_register(SRCS "main.c" INCLUDE_DIRS "." REQUIRES onvif-c)' > main/CMakeLists.txt
-          idf.py set-target esp32s3 >/dev/null 2>&1
+          idf.py set-target esp32s3 2>&1 | tail -5
           idf.py build 2>&1 | tail -3
