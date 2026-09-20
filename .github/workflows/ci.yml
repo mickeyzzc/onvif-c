@@ -38,7 +38,9 @@ jobs:
         shell: bash
         run: |
           set -x
-          . "$IDF_PATH/export.sh" 2>&1 | tail -1
+          # no pipe: export.sh must run in THIS shell so PATH sticks
+          . "$IDF_PATH/export.sh" > /tmp/idf_export.log 2>&1 || {
+              cat /tmp/idf_export.log; exit 1; }
           # EXTRA_COMPONENT_DIRS must name a dir CONTAINING the component dir,
           # and be set before project().
           mkdir -p /tmp/comps /tmp/probe/main
