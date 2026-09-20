@@ -106,7 +106,7 @@ Pull-Point 订阅周期，全过退出 0。
 
 ## 状态
 
-v0.2.0 —— API 接缝稳定；在 [Mi-Bee Studio](https://github.com/Mi-Bee-Studio)
+未发版（测试迭代中）—— API 接缝稳定；在 [Mi-Bee Studio](https://github.com/Mi-Bee-Studio)
 四块 ESP32/ESP32-S3 相机板上对 MiBee NVR 每日生产验证。客户端对应（Go）：
 [onvif-go](https://github.com/mickeyzzc/onvif-go)；兄弟设备端库（Rust）：
 [onvif-rs](https://github.com/mickeyzzc/onvif-rs)。
