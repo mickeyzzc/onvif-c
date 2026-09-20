@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.2.0 (2026-09-20)
+## [Unreleased]
 
 TDD hardening wave: the full ESP-IDF port layer is now host-tested, and
 coverage/style gates are enforced in CI.

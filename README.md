@@ -116,7 +116,7 @@ Set up the pre-commit hook once per clone: `tools/setup-hooks.sh`.
 
 ## Status
 
-v0.2.0 — API seam stable; production-tested daily at
+Unreleased (in active testing) — API seam stable; production-tested daily at
 [Mi-Bee Studio](https://github.com/Mi-Bee-Studio) on four ESP32/ESP32-S3
 camera boards against the MiBee NVR. Client counterpart (Go):
 [onvif-go](https://github.com/mickeyzzc/onvif-go); sibling device library
