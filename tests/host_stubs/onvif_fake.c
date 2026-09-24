@@ -682,7 +682,6 @@ esp_err_t esp_task_wdt_add(void *task_handle)
 
 esp_err_t esp_task_wdt_reset(void)
 {
-    (void)task_handle;
     onvif_fake_wdt_feeds++;
     return ESP_OK;
 }
