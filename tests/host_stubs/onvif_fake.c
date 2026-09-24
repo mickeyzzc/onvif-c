@@ -12,6 +12,7 @@
 #include <stdio.h>
 #include <unistd.h>
 #include "freertos/semphr.h"
+#include "esp_task_wdt.h"
 
 /* ------------------------------------------------------------------ */
 /*  esp_err_to_name                                                    */
@@ -662,4 +663,32 @@ char *inet_ntoa(struct in_addr in)
     char       *buf = bufs[rot++ & 3];
     raw_to_ip(in.s_addr, buf, sizeof(bufs[0]));
     return buf;
+}
+
+/* ------------------------------------------------------------------ */
+/*  Fake task watchdog (counters only)                                 */
+/* ------------------------------------------------------------------ */
+
+int onvif_fake_wdt_added;
+int onvif_fake_wdt_feeds;
+int onvif_fake_wdt_deleted;
+
+esp_err_t esp_task_wdt_add(void *task_handle)
+{
+    (void)task_handle;
+    onvif_fake_wdt_added++;
+    return ESP_OK;
+}
+
+esp_err_t esp_task_wdt_reset(void)
+{
+    onvif_fake_wdt_feeds++;
+    return ESP_OK;
+}
+
+esp_err_t esp_task_wdt_delete(void *task_handle)
+{
+    (void)task_handle;
+    onvif_fake_wdt_deleted++;
+    return ESP_OK;
 }
