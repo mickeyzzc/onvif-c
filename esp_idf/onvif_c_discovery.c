@@ -87,7 +87,7 @@ static void onvif_c_discovery_task(void *arg)
 
 #if ONVIF_C_HAVE_WDT
         if (wdt_watched) {
-            esp_task_wdt_reset(NULL);
+            esp_task_wdt_reset();
         }
 #endif
 
@@ -188,7 +188,7 @@ static void onvif_c_discovery_task(void *arg)
 
 #if ONVIF_C_HAVE_WDT
             if (wdt_watched) {
-                esp_task_wdt_reset(NULL);
+                esp_task_wdt_reset();
             }
 #endif
 
