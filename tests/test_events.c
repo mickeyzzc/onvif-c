@@ -233,8 +233,21 @@ void test_events(void)
     CHECK_SUB(r.resp, "ter:SubscriptionReferenceDereferenced", "pull after unsubscribe faults");
     CHECK(count_events(&r) == 0, "post-unsubscribe motion not delivered");
 
-    /* unsupported action / body edge cases */
+    /* events statics (issue #15) */
+    CHECK(post_body(u, ev_body("<tev:GetEventProperties/>"), &r) == ESP_OK,
+          "event properties handled");
+    CHECK_SUB(r.resp, "<wsnt:FixedTopicSet>true</wsnt:FixedTopicSet>", "fixed topic set");
+    CHECK_SUB(r.resp, "MessageContentFilterDialect", "message filter dialect");
+
+    CHECK(post_body(u, ev_body("<tev:GetServiceCapabilities/>"), &r) == ESP_OK,
+          "events caps handled");
+    CHECK_SUB(r.resp, "WSPullPointSupport=\"true\"", "pull point supported");
+
     CHECK(post_body(u, ev_body("<tev:SetSynchronizationPoint/>"), &r) == ESP_OK,
+          "events sync point handled");
+    CHECK_SUB(r.resp, "SetSynchronizationPointResponse", "events sync point ack");
+
+    CHECK(post_body(u, ev_body("<tev:GetNotARealAction/>"), &r) == ESP_OK,
           "unsupported events action handled");
     CHECK_SUB(r.resp, "ter:ActionNotSupported", "unsupported action fault");
     CHECK(onvif_fake_httpd_invoke(u, NULL, 0, &r) == ESP_OK, "empty events body handled");
