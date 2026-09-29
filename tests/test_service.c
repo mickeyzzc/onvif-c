@@ -17,6 +17,11 @@
 
 /* ---- controllable callbacks ---- */
 
+static int  g_keyframe_calls;
+static void cb_keyframe(void)
+{
+    g_keyframe_calls++;
+}
 static int g_gate    = 1;
 static int g_fps     = 12;
 static int g_ip_mode = 0;  /* 0 good, 1 zero-always */
@@ -71,6 +76,7 @@ static onvif_c_config_t base_cfg(void)
     c.ip               = cb_ip;
     c.stream_uri       = cb_stream_uri;
     c.frame_rate       = cb_frame_rate;
+    c.on_keyframe      = cb_keyframe;
     c.http_port        = 80;
     return c;
 }
@@ -236,9 +242,66 @@ void test_service(void)
     CHECK(post(u, "<trt:GetSnapshotUri/>", &r) == ESP_OK, "snapshot handler ok");
     CHECK_SUB(r.resp, "<tt:Uri>http://" T_IP "/cap</tt:Uri>", "explicit snapshot uri wins");
 
-    /* ---- faults and body edge cases ---- */
+    /* ---- media completion (issue #14) ---- */
     CHECK(post(u, "<trt:GetVideoEncoderConfigurations/>", &r) == ESP_OK,
-          "unknown media action handled");
+          "encoder configurations handled");
+    CHECK_SUB(r.resp, "<trt:GetVideoEncoderConfigurationsResponse>", "encoder configs envelope");
+    CHECK_SUB(r.resp, "<tt:Encoding>JPEG</tt:Encoding>", "encoder configs encoding");
+
+    CHECK(post(u,
+               "<trt:GetVideoEncoderConfiguration><trt:ConfigurationToken>t</"
+               "trt:ConfigurationToken></trt:GetVideoEncoderConfiguration>",
+               &r) == ESP_OK,
+          "single encoder configuration handled");
+    CHECK_SUB(r.resp, "GetVideoEncoderConfigurationResponse", "single encoder config envelope");
+
+    CHECK(post(u, "<trt:GetVideoEncoderConfigurationOptions/>", &r) == ESP_OK,
+          "encoder options handled");
+    CHECK_SUB(r.resp,
+              "<tt:FrameRateRange><tt:Min>1</tt:Min><tt:Max>12</tt:Max></tt:FrameRateRange>",
+              "encoder options ranges");
+
+    CHECK(post(u, "<trt:SetVideoEncoderConfiguration/>", &r) == ESP_OK,
+          "set encoder configuration acknowledged");
+    CHECK_SUB(r.resp, "SetVideoEncoderConfigurationResponse", "set encoder ack");
+
+    CHECK(post(u, "<trt:GetGuaranteedNumberOfVideoEncoderInstances/>", &r) == ESP_OK,
+          "guaranteed instances handled");
+    CHECK_SUB(r.resp, "<trt:TotalInstances>1</trt:TotalInstances>", "one guaranteed instance");
+
+    g_keyframe_calls = 0;
+    CHECK(post(u, "<trt:SetSynchronizationPoint/>", &r) == ESP_OK, "sync point handled");
+    CHECK_SUB(r.resp, "SetSynchronizationPointResponse", "sync point ack");
+    CHECK(g_keyframe_calls == 1, "on_keyframe seam fired");
+
+    CHECK(post(u, "<trt:GetServiceCapabilities/>", &r) == ESP_OK, "media caps handled");
+    CHECK_SUB(r.resp, "RTP_Multicast=\"false\"", "multicast explicitly off");
+
+    CHECK(post(u, "<trt:GetVideoSources/>", &r) == ESP_OK, "video sources handled");
+    CHECK_SUB(r.resp, "GetVideoSourcesResponse", "video sources envelope");
+
+    /* ---- device completion (issue #13) ---- */
+    u = onvif_fake_httpd_find("/onvif/device_service");
+    CHECK(u != NULL, "device handler still registered");
+    CHECK(post(u, "<tds:GetServices/>", &r) == ESP_OK, "get services handled");
+    CHECK_SUB(r.resp, "http://www.onvif.org/ver10/media/wsdl</tds:Namespace>", "media listed");
+    CHECK_SUB(r.resp, "/onvif/media_service</tds:XAddr>", "media xaddr");
+
+    CHECK(post(u, "<tds:GetScopes/>", &r) == ESP_OK, "get scopes handled");
+    CHECK_SUB(r.resp, "<tt:ScopeDef>Fixed</tt:ScopeDef>", "scopes element form");
+    CHECK_SUB(r.resp, "onvif://www.onvif.org/name/", "scopes content");
+
+    CHECK(post(u, "<tds:SystemReboot/>", &r) == ESP_OK, "reboot handled");
+    CHECK_SUB(r.resp, "<tds:Message>Device rebooting</tds:Message>", "reboot message");
+
+    CHECK(post(u, "<tds:SetSystemDateAndTime/>", &r) == ESP_OK, "set date handled");
+    CHECK_SUB(r.resp, "SetSystemDateAndTimeResponse", "set date ack");
+
+    CHECK(post(u, "<tds:GetServiceCapabilities/>", &r) == ESP_OK, "device caps handled");
+    CHECK_SUB(r.resp, "Network=\"false\"", "device caps network off");
+
+    /* ---- faults and body edge cases ---- */
+    CHECK(post(u, "<trt:GetNotARealAction/>", &r) == ESP_OK, "unknown media action handled");
     CHECK_SUB(r.resp, "ter:ActionNotSupported", "unknown media action fault");
 
     CHECK(onvif_fake_httpd_invoke(u, NULL, 0, &r) == ESP_OK, "empty body handled");

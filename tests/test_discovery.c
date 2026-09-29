@@ -209,6 +209,41 @@ void test_discovery(void)
     onvif_fake_task_drain();
     g_ip_mode = 0;
 
+    /* Bye on stop (issue #16): the departure announcement is captured by
+     * the fake net even though the task's socket dies with the task. */
+    onvif_fake_httpd_reset();
+    onvif_fake_net_reset();
+    CHECK(onvif_c_start(hd, &cfg) == ESP_OK, "start for bye test ok");
+    CHECK(onvif_fake_net_wait_send("discovery/Hello", 8000) >= 0, "hello before bye");
+    onvif_fake_net_reset();
+    CHECK(onvif_c_stop() == ESP_OK, "stop announces departure");
+    onvif_fake_task_drain();
+    CHECK(onvif_fake_net_wait_send("discovery/Bye", 2000) >= 0, "Bye sent on stop");
+
+    /* Resolve -> ResolveMatches unicast (issue #16) */
+    onvif_fake_httpd_reset();
+    onvif_fake_net_reset();
+    CHECK(onvif_c_start(hd, &cfg) == ESP_OK, "start for resolve test ok");
+    CHECK(onvif_fake_net_wait_send("discovery/Hello", 8000) >= 0, "hello before resolve");
+    {
+        char resolve_body[512];
+        snprintf(resolve_body, sizeof(resolve_body),
+                 "<s:Envelope xmlns:s=\"http://www.w3.org/2003/05/soap-envelope\""
+                 " xmlns:wsa=\"http://schemas.xmlsoap.org/ws/2004/08/addressing\""
+                 " xmlns:wsd=\"http://schemas.xmlsoap.org/ws/2005/04/discovery\">"
+                 "<s:Header><wsa:MessageID>urn:uuid:resolve-1</wsa:MessageID></s:Header>"
+                 "<s:Body><wsd:Resolve>"
+                 "<wsa:EndpointReference><wsa:Address>urn:uuid:%s</wsa:Address>"
+                 "</wsa:EndpointReference></wsd:Resolve>"
+                 "</s:Body></s:Envelope>",
+                 T_UUID);
+        onvif_fake_net_inject(resolve_body, "192.168.7.9", 37020);
+        CHECK(onvif_fake_net_wait_send("ResolveMatches", 8000) >= 0,
+              "ResolveMatches sent for our address");
+    }
+    onvif_c_stop();
+    onvif_fake_task_drain();
+
     /* mDNS requested but espressif/mdns absent: warning, discovery lives */
     onvif_fake_httpd_reset();
     onvif_fake_net_reset();

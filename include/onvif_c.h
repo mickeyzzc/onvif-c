@@ -57,6 +57,10 @@ typedef struct {
     const char *(*snapshot_uri)(void);
     /** GetProfiles FrameRateLimit; NULL -> 15. */
     uint8_t (*frame_rate)(void);
+    /** SetSynchronizationPoint hook (Media + Events): the encoder should
+     * emit a keyframe at the next opportunity. NULL = acknowledge only
+     * (issue #14).                                                          */
+    void (*on_keyframe)(void);
 
     /* ---- events (Pull-Point MotionAlarm). NULL = feature absent:
      * /onvif/events_service is not registered and its XAddr is not

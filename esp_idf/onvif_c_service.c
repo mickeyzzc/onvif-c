@@ -219,6 +219,22 @@ static esp_err_t dispatch_device_action(httpd_req_t *req, const char *body)
     if (strstr(body, "GetCapabilities")) {
         return handle_get_capabilities(req);
     }
+    if (strstr(body, "GetServices")) {
+        SEND_BUILT(req, onvif_xml_services(resp_, ONVIF_C_RESP_MAX, onvif_c_cfg_ip(),
+                                           s_cfg.http_port, onvif_c_cfg_has_events()));
+    }
+    if (strstr(body, "GetScopes")) {
+        SEND_BUILT(req, onvif_xml_get_scopes(resp_, ONVIF_C_RESP_MAX, onvif_c_cfg_scopes()));
+    }
+    if (strstr(body, "SystemReboot")) {
+        SEND_BUILT(req, onvif_xml_system_reboot(resp_, ONVIF_C_RESP_MAX));
+    }
+    if (strstr(body, "SetSystemDateAndTime")) {
+        SEND_BUILT(req, onvif_xml_set_system_date_and_time_ack(resp_, ONVIF_C_RESP_MAX));
+    }
+    if (strstr(body, "GetServiceCapabilities")) {
+        SEND_BUILT(req, onvif_xml_device_service_capabilities(resp_, ONVIF_C_RESP_MAX));
+    }
     log_unsupported(body);
     return send_fault(req);
 }
@@ -236,6 +252,40 @@ static esp_err_t dispatch_media_action(httpd_req_t *req, const char *body)
     }
     if (strstr(body, "GetSnapshotUri") || strstr(body, "GetSnapshot")) {
         return handle_get_snapshot(req);
+    }
+    if (strstr(body, "GetVideoSources")) {
+        SEND_BUILT(req, onvif_xml_video_sources(resp_, ONVIF_C_RESP_MAX, "VideoSource_1", 640, 480,
+                                                s_cfg.frame_rate ? s_cfg.frame_rate() : 15));
+    }
+    if (strstr(body, "GetVideoEncoderConfigurationOptions")) {
+        SEND_BUILT(req, onvif_xml_video_encoder_configuration_options(
+                            resp_, ONVIF_C_RESP_MAX, 640, 480,
+                            s_cfg.frame_rate ? s_cfg.frame_rate() : 15));
+    }
+    if (strstr(body, "GetVideoEncoderConfigurations")) {
+        SEND_BUILT(req, onvif_xml_video_encoder_configurations(
+                            resp_, ONVIF_C_RESP_MAX, "VideoEncoder_1", 640, 480,
+                            s_cfg.frame_rate ? s_cfg.frame_rate() : 15, 4096));
+    }
+    if (strstr(body, "GetVideoEncoderConfiguration")) {
+        SEND_BUILT(req, onvif_xml_video_encoder_configuration(
+                            resp_, ONVIF_C_RESP_MAX, "VideoEncoder_1", 640, 480,
+                            s_cfg.frame_rate ? s_cfg.frame_rate() : 15, 4096));
+    }
+    if (strstr(body, "SetVideoEncoderConfiguration")) {
+        SEND_BUILT(req, onvif_xml_set_video_encoder_configuration_ack(resp_, ONVIF_C_RESP_MAX));
+    }
+    if (strstr(body, "GetGuaranteedNumberOfVideoEncoderInstances")) {
+        SEND_BUILT(req, onvif_xml_guaranteed_encoder_instances(resp_, ONVIF_C_RESP_MAX));
+    }
+    if (strstr(body, "SetSynchronizationPoint")) {
+        if (s_cfg.on_keyframe) {
+            s_cfg.on_keyframe();
+        }
+        SEND_BUILT(req, onvif_xml_set_synchronization_point_ack(resp_, ONVIF_C_RESP_MAX));
+    }
+    if (strstr(body, "GetServiceCapabilities")) {
+        SEND_BUILT(req, onvif_xml_media_service_capabilities(resp_, ONVIF_C_RESP_MAX));
     }
     log_unsupported(body);
     return send_fault(req);

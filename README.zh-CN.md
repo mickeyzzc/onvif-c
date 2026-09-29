@@ -16,9 +16,9 @@ Pull-Point 事件把相机交给 NVR，零第三方依赖，代码占用 ~10 KB�
   （`Source=CSI`、`State`、`Score 0-100`）；单订阅（新顶旧）、授予 1h
   TerminationTime、120s 空闲过期、**无长轮询**（PullMessages 立即返回，
   esp_http_server worker 永不阻塞）。
-- **WS-Discovery 应答器** —— UDP 3702 / 组播 239.255.255.250；对 Probe 单播
-  回 ProbeMatches，每 ~30s 周期性 Hello 广播。
-- **可选 mDNS** —— `_onvif._tcp` 广告。
+- **WS-Discovery 应答器** —— UDP 3702 / 组播 239.255.255.250；Probe 单播
+  ProbeMatches 应答、Resolve（针对自身地址）单播 ResolveMatches 应答、约每 30 秒
+  Hello 通告、`onvif_c_stop()` 时组播 Bye 让 NVR 立即丢弃失效 XAddr。
 - **无 XML 解析器、无动态状态** —— 动作识别 `strstr()`、响应生成
   `snprintf()`；仅每请求缓冲；运动事件生产者钩子非阻塞，传感器回调语境安全。
 - **单一配置接缝** —— 板级差异（身份、IP、流地址、运行时开关）全部收敛到

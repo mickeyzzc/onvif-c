@@ -2,6 +2,24 @@
 
 ## [Unreleased]
 
+### Added — protocol completion batch (issues #13/#14/#15/#16)
+
+- Device: `GetServices` (Namespace+XAddr per served service, Events
+  gated), `GetScopes` (element form), `SystemReboot` (protocol answer),
+  `SetSystemDateAndTime` (ack), `GetServiceCapabilities`.
+- Media: `GetVideoSources`, `GetVideoEncoderConfiguration(s)`,
+  `GetVideoEncoderConfigurationOptions`, `SetVideoEncoderConfiguration`
+  (ack), `GetGuaranteedNumberOfVideoEncoderInstances` (1),
+  `SetSynchronizationPoint` (fires the new optional `on_keyframe`
+  config seam), `GetServiceCapabilities` (multicast explicitly off —
+  Start/StopMulticastStreaming stay ActionNotSupported by design).
+- Events: `GetEventProperties`, `GetServiceCapabilities`,
+  `SetSynchronizationPoint`. Multi-subscription and bounded long polling
+  remain deliberately out (esp_http_server workers must never block).
+- WS-Discovery: multicast Bye from `onvif_c_stop()` (short-lived socket
+  owned by the stop caller); Resolve/ResolveMatches for our own address.
+- New host goldens pin all new response bytes (ASan-clean).
+
 TDD hardening wave: the full ESP-IDF port layer is now host-tested, and
 coverage/style gates are enforced in CI.
 

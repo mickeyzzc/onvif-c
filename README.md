@@ -13,13 +13,24 @@ English | [中文](README.zh-CN.md)
 
 - **SOAP Device/Media service** — the exact action set NVRs need to discover
   and add a camera: `GetSystemDateAndTime`, `GetDeviceInformation`,
-  `GetCapabilities`, `GetProfiles`, `GetStreamUri`, `GetSnapshotUri`.
+  `GetCapabilities`, `GetServices`, `GetScopes`, `SetSystemDateAndTime`
+  (ack), `SystemReboot` (protocol answer), device `GetServiceCapabilities`,
+  `GetProfiles`, `GetStreamUri`, `GetSnapshotUri`, `GetVideoSources`, the
+  video encoder configuration family (get/get-options/set-ack), guaranteed
+  instance count, `SetSynchronizationPoint` (fires the optional
+  `on_keyframe` seam), and Media `GetServiceCapabilities` with multicast
+  explicitly off.
 - **Pull-Point Events service** — `tns1:VideoSource/MotionAlarm` topic
   (`Source=CSI`, `State`, `Score 0-100`); single subscription, 1 h granted
   TerminationTime, 120 s idle expiry, no long polling (PullMessages returns
-  immediately — esp_http_server workers never block).
+  immediately — esp_http_server workers never block; both are deliberate
+  design decisions). `GetEventProperties`, `GetServiceCapabilities`, and
+  `SetSynchronizationPoint` (via the `on_keyframe` seam) are answered too.
 - **WS-Discovery responder** — UDP 3702 / multicast 239.255.255.250;
-  answers Probe with unicast ProbeMatches and announces Hello every ~30 s.
+  answers Probe with unicast ProbeMatches, answers Resolve for its own
+  address with ResolveMatches, announces Hello every ~30 s, and sends a
+  multicast Bye from `onvif_c_stop()` so NVRs drop stale XAddrs
+  immediately.
 - **Optional mDNS** — `_onvif._tcp` advertisement.
 - **No XML parser, no dynamic state** — action detection via `strstr()`,
   responses via `snprintf()`; per-request buffers only; the motion producer
