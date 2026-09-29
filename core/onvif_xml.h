@@ -65,6 +65,8 @@ int onvif_xml_events_sync_point_ack(char *buf, size_t n);
 
 /* ---- Faults ---- */
 int onvif_xml_fault_action_not_supported(char *buf, size_t n);
+/** WS-Security rejection fault (sent with HTTP 401). */
+int onvif_xml_fault_not_authorized(char *buf, size_t n);
 
 /* ---- Events service (Pull-Point) ----
  * Timestamps are pre-formatted ISO-8601 ("YYYY-MM-DDThh:mm:ssZ", 24 bytes). */

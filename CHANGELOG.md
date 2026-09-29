@@ -2,6 +2,19 @@
 
 ## [Unreleased]
 
+### Added — optional WS-Security UsernameToken (issue #17)
+
+- `core/onvif_wsse.c`: self-contained SHA-1 + Base64 + the ONVIF digest
+  formula `BASE64(SHA1(B64(nonce) + created + password))` — no mbedtls,
+  ~2.5 KB of code.
+- `onvif_c_config_t.auth_password` enables the gate: every action except
+  pre-auth `GetSystemDateAndTime` requires a valid PasswordDigest token;
+  rejections answer HTTP 401 + a `NotAuthorized` fault.
+- Created freshness window (`auth_window_secs`, default 300 s), bounded
+  16-slot nonce replay cache, constant-time comparisons,
+  `auth_allow_password_text` opt-in (insecure without TLS).
+- Default behavior unchanged: no `auth_password` = open LAN service.
+
 ### Added — protocol completion batch (issues #13/#14/#15/#16)
 
 - Device: `GetServices` (Namespace+XAddr per served service, Events

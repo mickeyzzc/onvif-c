@@ -8,6 +8,7 @@
 #include "onvif_c_port.h"
 #include "onvif_c_events.h"
 #include "../core/onvif_xml.h"
+#include "../core/onvif_wsse.h"
 #include "esp_http_server.h"
 #include "esp_log.h"
 #include "esp_err.h"
@@ -315,11 +316,53 @@ static esp_err_t dispatch_media_action(httpd_req_t *req, const char *body)
 /*  HTTP handlers                                                      */
 /* ------------------------------------------------------------------ */
 
+/* ------------------------------------------------------------------ */
+/*  Authentication gate (issue #17)                                    */
+/* ------------------------------------------------------------------ */
+
+static onvif_wsse_nonce_cache_t s_nonce_cache;
+
+bool onvif_c_auth_gate(httpd_req_t *req, const char *body)
+{
+    const onvif_c_config_t *cfg = onvif_c_cfg();
+    if (!cfg || !cfg->auth_password) {
+        return true; /* feature absent — historical open behavior */
+    }
+    if (body && strstr(body, "GetSystemDateAndTime")) {
+        return true; /* pre-auth per the ONVIF Core spec */
+    }
+
+    const char         *password = cfg->auth_password();
+    const char         *username = cfg->auth_username ? cfg->auth_username : "admin";
+    onvif_wsse_status_t st = onvif_wsse_verify(body ? body : "", username, password,
+                                               (int64_t)time(NULL), (int)cfg->auth_window_secs,
+                                               cfg->auth_allow_password_text, &s_nonce_cache);
+    if (st == ONVIF_WSSE_OK) {
+        return true;
+    }
+
+    char *resp = malloc(ONVIF_C_RESP_MAX);
+    if (!resp) {
+        return false;
+    }
+    int len = onvif_xml_fault_not_authorized(resp, ONVIF_C_RESP_MAX);
+    httpd_resp_set_status(req, "401 Unauthorized");
+    httpd_resp_set_type(req, "application/soap+xml");
+    httpd_resp_send(req, resp, len > 0 ? len : 0);
+    free(resp);
+    ESP_LOGW(TAG, "WS-Security rejected (status %d)", (int)st);
+    return false;
+}
+
 static esp_err_t device_service_handler(httpd_req_t *req)
 {
     char *body = read_body(req);
     if (body) {
         ESP_LOGI(TAG, "DEVICE REQ [first 200]: %.200s", body);
+    }
+    if (!onvif_c_auth_gate(req, body)) {
+        free(body);
+        return ESP_OK;
     }
     esp_err_t ret = dispatch_device_action(req, body);
     free(body);
@@ -332,7 +375,7 @@ static esp_err_t media_service_handler(httpd_req_t *req)
     if (body) {
         ESP_LOGI(TAG, "MEDIA REQ [first 200]: %.200s", body);
     }
-    esp_err_t ret = dispatch_media_action(req, body);
+    esp_err_t ret = onvif_c_auth_gate(req, body) ? dispatch_media_action(req, body) : ESP_OK;
     free(body);
     return ret;
 }

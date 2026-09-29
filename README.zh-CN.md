@@ -27,6 +27,12 @@ Pull-Point 事件把相机交给 NVR，零第三方依赖，代码占用 ~10 KB�
   编译出局。
 - **无 XML 解析器、无动态状态** —— 动作识别 `strstr()`、响应生成
   `snprintf()`；仅每请求缓冲；运动事件生产者钩子非阻塞，传感器回调语境安全。
+- **可选 WS-Security UsernameToken**（issue #17）—— 配置 `auth_password`
+  后，除预认证动作 `GetSystemDateAndTime` 外所有请求必须携带有效
+  PasswordDigest 令牌：自带 SHA-1 + Base64（无需 mbedtls）、常数时间比较、
+  Created 时效窗口、有界 Nonce 重放缓存，拒绝时回 HTTP 401 +
+  `NotAuthorized` 故障。`auth_allow_password_text` 可选接受明文形式
+  （无 TLS 时不安全）。默认不启用——开放局域网行为不变。
 - **单一配置接缝** —— 板级差异（身份、IP、流地址、运行时开关、HTTP 端口）
   全部收敛到 `onvif_c_config_t` 回调，零硬编码。
 

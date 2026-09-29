@@ -501,6 +501,117 @@ static const char *G_NEW_SCOPES =
     "es><tt:ScopeDef>Fixed</tt:ScopeDef><tt:ScopeItem>onvif://www.onvif.org/name/MiBeeCam</tt:Sco"
     "peItem></tt:Scopes></tds:GetScopesResponse></soap:Body></soap:Envelope>";
 
+/* ------------------------------------------------------------------ */
+/*  WS-Security UsernameToken (issue #17)                              */
+/* ------------------------------------------------------------------ */
+
+#include "../core/onvif_wsse.h"
+
+static void test_wsse(void)
+{
+    /* SHA-1 FIPS vectors. */
+    uint8_t d[20];
+    char    hex[41];
+    onvif_sha1((const uint8_t *)"abc", 3, d);
+    for (int i = 0; i < 20; i++)
+        sprintf(hex + 2 * i, "%02x", d[i]);
+    CHECK_STR(hex, "a9993e364706816aba3e25717850c26c9cd0d89d", "sha1 abc");
+    onvif_sha1((const uint8_t *)"", 0, d);
+    for (int i = 0; i < 20; i++)
+        sprintf(hex + 2 * i, "%02x", d[i]);
+    CHECK_STR(hex, "da39a3ee5e6b4b0d3255bfef95601890afd80709", "sha1 empty");
+
+    /* Base64 round-trip. */
+    uint8_t raw[64];
+    char    b64[96];
+    int     n = onvif_base64_decode("aGVsbG8=", 8, raw, sizeof raw);
+    CHECK(n == 5 && memcmp(raw, "hello", 5) == 0, "base64 decode");
+    onvif_base64_encode((const uint8_t *)"hello", 5, b64, sizeof b64);
+    CHECK_STR(b64, "aGVsbG8=", "base64 encode");
+
+    /* Valid digest envelope built with the primitives themselves. */
+    const char *created   = "2026-09-29T10:00:00Z";
+    const char *pwd       = "s3cret";
+    const char *nonce_b64 = "MTIzNDU2Nzg="; /* "12345678" */
+    uint8_t     nonce_raw[16];
+    onvif_base64_decode(nonce_b64, strlen(nonce_b64), nonce_raw, sizeof nonce_raw);
+    uint8_t payload[128];
+    size_t  pl = 0;
+    memcpy(payload, nonce_raw, 8);
+    pl = 8;
+    memcpy(payload + pl, created, strlen(created));
+    pl += strlen(created);
+    memcpy(payload + pl, pwd, strlen(pwd));
+    pl += strlen(pwd);
+    onvif_sha1(payload, pl, d);
+    char digest_b64[32];
+    onvif_base64_encode(d, 20, digest_b64, sizeof digest_b64);
+
+    char env[1024];
+    snprintf(env, sizeof env,
+             "<s:Envelope xmlns:s=\"http://www.w3.org/2003/05/soap-envelope\""
+             " xmlns:wsse=\"http://docs.oasis-open.org/wss/2004/01/"
+             "oasis-200401-wss-wssecurity-secext-1.0.xsd\">"
+             "<s:Header><wsse:Security><wsse:UsernameToken>"
+             "<wsse:Username>admin</wsse:Username>"
+             "<wsse:Password "
+             "Type=\"http://docs.oasis-open.org/wss/2004/01/"
+             "oasis-200401-wss-username-token-profile-1.0#PasswordDigest\">%s</wsse:Password>"
+             "<wsse:Nonce>%s</wsse:Nonce>"
+             "<wsu:Created xmlns:wsu=\"x\">%s</wsu:Created>"
+             "</wsse:UsernameToken></wsse:Security></s:Header>"
+             "<s:Body><tds:GetDeviceInformation/></s:Body></s:Envelope>",
+             digest_b64, nonce_b64, created);
+
+    int64_t now = 0;
+    CHECK(onvif_wsse_parse_created(created, &now), "created parses");
+    CHECK(now > 1780000000, "created epoch plausible");
+
+    onvif_wsse_nonce_cache_t cache = {0};
+    CHECK(onvif_wsse_verify(env, "admin", "s3cret", now, 300, false, &cache) == ONVIF_WSSE_OK,
+          "valid digest accepted");
+    CHECK(onvif_wsse_verify(env, "admin", "s3cret", now, 300, false, &cache) == ONVIF_WSSE_REPLAY,
+          "same nonce rejected on replay");
+    CHECK(onvif_wsse_verify(env, "admin", "wrong", now, 300, false, NULL) == ONVIF_WSSE_BAD_DIGEST,
+          "wrong password rejected");
+    CHECK(onvif_wsse_verify(env, "other", "s3cret", now, 300, false, NULL) == ONVIF_WSSE_BAD_DIGEST,
+          "wrong username rejected");
+    CHECK(onvif_wsse_verify(env, "admin", "s3cret", now + 301, 300, false, NULL) ==
+              ONVIF_WSSE_STALE,
+          "stale created rejected");
+    CHECK(onvif_wsse_verify("<s:Envelope><s:Body/></s:Envelope>", "admin", "s3cret", now, 300,
+                            false, NULL) == ONVIF_WSSE_NO_TOKEN,
+          "missing token rejected");
+
+    /* PasswordText: rejected by default, accepted when allowed. */
+    char env_text[512];
+    snprintf(env_text, sizeof env_text,
+             "<s:Envelope xmlns:s=\"http://www.w3.org/2003/05/soap-envelope\""
+             " xmlns:wsse=\"http://docs.oasis-open.org/wss/2004/01/"
+             "oasis-200401-wss-wssecurity-secext-1.0.xsd\">"
+             "<s:Header><wsse:Security><wsse:UsernameToken>"
+             "<wsse:Username>admin</wsse:Username>"
+             "<wsse:Password Type=\"#PasswordText\">s3cret</wsse:Password>"
+             "</wsse:UsernameToken></wsse:Security></s:Header>"
+             "<s:Body><x/></s:Body></s:Envelope>");
+    CHECK(onvif_wsse_verify(env_text, "admin", "s3cret", now, 300, false, NULL) ==
+              ONVIF_WSSE_TEXT_REJECTED,
+          "PasswordText rejected unless allowed");
+    CHECK(onvif_wsse_verify(env_text, "admin", "s3cret", now, 300, true, NULL) == ONVIF_WSSE_OK,
+          "PasswordText accepted when allowed");
+
+    /* Malformed created -> stale. */
+    char env_bad[512];
+    snprintf(env_bad, sizeof env_bad,
+             "<s:Envelope xmlns:wsse=\"x\"><s:Header><wsse:Security><wsse:UsernameToken>"
+             "<wsse:Username>a</wsse:Username><wsse:Password>p</wsse:Password>"
+             "<wsse:Nonce>%s</wsse:Nonce><wsu:Created>garbage</wsu:Created>"
+             "</wsse:UsernameToken></wsse:Security></s:Header><s:Body/></s:Envelope>",
+             nonce_b64);
+    CHECK(onvif_wsse_verify(env_bad, "a", "p", now, 300, false, NULL) == ONVIF_WSSE_STALE,
+          "malformed created treated stale");
+}
+
 int main(void)
 {
     test_device_service_xml();
@@ -557,6 +668,8 @@ int main(void)
         "onvif://www.onvif.org/type/video_encoder onvif://www.onvif.org/name/MiBeeCam");
     CHECK(n > 0 && (size_t)n < sizeof g, "scopes built");
     CHECK_STR(g, G_NEW_SCOPES, "scopes golden");
+    test_wsse();
+
     printf("%d checks, %d failures\n", checks, failures);
     return failures == 0 ? 0 : 1;
 }

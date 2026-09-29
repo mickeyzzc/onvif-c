@@ -704,3 +704,25 @@ int onvif_xml_events_sync_point_ack(char *buf, size_t n)
                     "</s:Body>"
                     "</s:Envelope>");
 }
+
+int onvif_xml_fault_not_authorized(char *buf, size_t n)
+{
+    return snprintf(
+        buf, n,
+        "<?xml version=\"1.0\" encoding=\"utf-8\"?>"
+        "<soap:Envelope"
+        " xmlns:soap=\"http://www.w3.org/2003/05/soap-envelope\""
+        " xmlns:tds=\"http://www.onvif.org/ver10/device/wsdl\">"
+        "<soap:Body>"
+        "<soap:Fault>"
+        "<soap:Code>"
+        "<soap:Value>soap:Sender</soap:Value>"
+        "<soap:Subcode>"
+        "<soap:Value>tds:NotAuthorized</soap:Value>"
+        "</soap:Subcode>"
+        "</soap:Code>"
+        "<soap:Reason><soap:Text xml:lang=\"en\">Sender not authorized</soap:Text></soap:Reason>"
+        "</soap:Fault>"
+        "</soap:Body>"
+        "</soap:Envelope>");
+}

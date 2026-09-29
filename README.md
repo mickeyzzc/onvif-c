@@ -38,6 +38,14 @@ English | [中文](README.zh-CN.md)
 - **No XML parser, no dynamic state** — action detection via `strstr()`,
   responses via `snprintf()`; per-request buffers only; the motion producer
   hook is non-blocking and safe from sensor callback context.
+- **Optional WS-Security UsernameToken** (issue #17) — set
+  `auth_password` in the config and every action except the pre-auth
+  `GetSystemDateAndTime` must carry a valid PasswordDigest token:
+  self-contained SHA-1 + Base64 (no mbedtls), constant-time comparison,
+  Created freshness window, bounded nonce replay cache, HTTP 401 +
+  `NotAuthorized` fault on rejection. `auth_allow_password_text` opts
+  into the plaintext form (insecure without TLS). Absent by default —
+  the open-LAN behavior is unchanged.
 - **One-config integration seam** — everything board-specific (identity, IP,
   stream URI, runtime gates, HTTP port) stays behind `onvif_c_config_t`
   callbacks; nothing is hardcoded.

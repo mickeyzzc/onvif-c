@@ -62,6 +62,16 @@ typedef struct {
      * (issue #14).                                                          */
     void (*on_keyframe)(void);
 
+    /* ---- authentication (WS-Security UsernameToken, issue #17) ----
+     * auth_password == NULL = feature absent: every request is served
+     * unauthenticated (the historical behavior). When set, every action
+     * except the pre-auth set (GetSystemDateAndTime per the Core spec)
+     * must carry a valid UsernameToken (PasswordDigest; replay-guarded). */
+    const char *(*auth_password)(void);   /* required to enable auth       */
+    const char *auth_username;            /* NULL -> "admin"               */
+    uint16_t    auth_window_secs;         /* Created window; 0 -> 300      */
+    bool        auth_allow_password_text; /* insecure without TLS       */
+
     /* ---- events (Pull-Point MotionAlarm). NULL = feature absent:
      * /onvif/events_service is not registered and its XAddr is not
      * advertised in GetCapabilities.                                    */

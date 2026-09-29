@@ -12,11 +12,16 @@
 #include "../include/onvif_c.h"
 #include "../esp_idf/onvif_c_port.h"
 #include "test_util.h"
+#include "../core/onvif_wsse.h"
 #include "onvif_fake.h"
 #include <stdlib.h>
 
 /* ---- controllable callbacks ---- */
 
+static const char *cb_auth_password(void)
+{
+    return "s3cret";
+}
 static int  g_keyframe_calls;
 static void cb_keyframe(void)
 {
@@ -399,4 +404,71 @@ void test_service(void)
     onvif_fake_task_fail_create_once();
     CHECK(onvif_c_start(hd, &cfg) == ESP_FAIL, "discovery task creation failure propagates");
     CHECK(onvif_fake_httpd_register_count() == 2, "handlers stay registered when discovery fails");
+
+    /* ---- authentication gate (issue #17) ---- */
+    onvif_fake_httpd_reset();
+    reset_env();
+    cfg               = base_cfg();
+    cfg.auth_password = cb_auth_password;
+    CHECK(onvif_c_start(hd, &cfg) == ESP_OK, "start with auth ok");
+    u = onvif_fake_httpd_find("/onvif/device_service");
+
+    /* No token -> 401 + NotAuthorized fault. */
+    CHECK(post(u, "<tds:GetDeviceInformation/>", &r) == ESP_OK, "no-token handled");
+    CHECK_SUB(r.status, "401", "no-token gets 401");
+    CHECK_SUB(r.resp, "NotAuthorized", "no-token fault body");
+
+    /* Pre-auth action open per the Core spec. */
+    CHECK(post(u, "<tds:GetSystemDateAndTime/>", &r) == ESP_OK, "pre-auth handled");
+    CHECK_SUB(r.status, "200", "GetSystemDateAndTime open");
+    CHECK_SUB(r.resp, "GetSystemDateAndTimeResponse", "pre-auth response");
+
+    /* Valid digest accepted (built with the wsse primitives). */
+    {
+        uint8_t     d[20];
+        char        digest_b64[32];
+        char        env[1024];
+        const char *created = "2026-09-29T10:00:00Z";
+        int64_t     now_s   = 0;
+        onvif_wsse_parse_created(created, &now_s);
+        onvif_fake_time_set((time_t)now_s);
+        uint8_t payload[128];
+        size_t  pl = 0;
+        memcpy(payload, "12345678", 8);
+        pl = 8;
+        memcpy(payload + pl, created, strlen(created));
+        pl += strlen(created);
+        memcpy(payload + pl, "s3cret", 6);
+        pl += 6;
+        onvif_sha1(payload, pl, d);
+        onvif_base64_encode(d, 20, digest_b64, sizeof digest_b64);
+        snprintf(env, sizeof env,
+                 "<s:Envelope xmlns:s=\"http://www.w3.org/2003/05/soap-envelope\""
+                 " xmlns:wsse=\"http://docs.oasis-open.org/wss/2004/01/"
+                 "oasis-200401-wss-wssecurity-secext-1.0.xsd\">"
+                 "<s:Header><wsse:Security><wsse:UsernameToken>"
+                 "<wsse:Username>admin</wsse:Username>"
+                 "<wsse:Password Type=\"#PasswordDigest\">%s</wsse:Password>"
+                 "<wsse:Nonce>MTIzNDU2Nzg=</wsse:Nonce>"
+                 "<wsu:Created>%s</wsu:Created>"
+                 "</wsse:UsernameToken></wsse:Security></s:Header>"
+                 "<s:Body><tds:GetDeviceInformation/></s:Body></s:Envelope>",
+                 digest_b64, created);
+        CHECK(onvif_fake_httpd_invoke(u, env, strlen(env), &r) == ESP_OK, "digest request handled");
+        CHECK_SUB(r.status, "200", "valid digest gets 200");
+        CHECK_SUB(r.resp, "GetDeviceInformationResponse", "valid digest served");
+
+        /* Same envelope again -> replay rejected. */
+        CHECK(onvif_fake_httpd_invoke(u, env, strlen(env), &r) == ESP_OK, "replay handled");
+        CHECK_SUB(r.status, "401", "replayed nonce gets 401");
+    }
+
+    /* Media service behind the same gate. */
+    u = onvif_fake_httpd_find("/onvif/media_service");
+    CHECK(u != NULL, "media registered");
+    CHECK(post(u, "<trt:GetProfiles/>", &r) == ESP_OK, "media no-token handled");
+    CHECK_SUB(r.status, "401", "media no-token 401");
+
+    onvif_c_stop();
+    onvif_fake_task_drain();
 }

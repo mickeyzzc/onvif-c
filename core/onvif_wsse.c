@@ -5,6 +5,7 @@
 #include "onvif_wsse.h"
 
 #include <string.h>
+#include <stdio.h>
 
 /* ------------------------------------------------------------------ */
 /*  SHA-1 (FIPS 180-1) — self-contained, ~1 KB code                    */
@@ -21,7 +22,7 @@ void onvif_sha1(const uint8_t *data, size_t len, uint8_t digest[20])
     uint64_t bits = (uint64_t)len * 8;
 
     /* Padded message: data + 0x80 + zeros + 8-byte big-endian bit length. */
-    size_t padded = ((len + 8) / 64 + 1) * 64;
+    size_t  padded = ((len + 8) / 64 + 1) * 64;
     uint8_t buf[128];
     /* len <= 4096 request bodies / <64 B nonce+created+password inputs in
      * the ONVIF path; longer inputs are processed in 64-byte chunks. */
@@ -59,11 +60,11 @@ void onvif_sha1(const uint8_t *data, size_t len, uint8_t digest[20])
                     k = 0xCA62C1D6;
                 }
                 uint32_t t = rol32(a, 5) + f + e + k + w[i];
-                e = d;
-                d = c;
-                c = rol32(b, 30);
-                b = a;
-                a = t;
+                e          = d;
+                d          = c;
+                c          = rol32(b, 30);
+                b          = a;
+                a          = t;
             }
             h[0] += a;
             h[1] += b;
@@ -86,19 +87,24 @@ void onvif_sha1(const uint8_t *data, size_t len, uint8_t digest[20])
 
 static int b64_val(char c)
 {
-    if (c >= 'A' && c <= 'Z') return c - 'A';
-    if (c >= 'a' && c <= 'z') return c - 'a' + 26;
-    if (c >= '0' && c <= '9') return c - '0' + 52;
-    if (c == '+') return 62;
-    if (c == '/') return 63;
+    if (c >= 'A' && c <= 'Z')
+        return c - 'A';
+    if (c >= 'a' && c <= 'z')
+        return c - 'a' + 26;
+    if (c >= '0' && c <= '9')
+        return c - '0' + 52;
+    if (c == '+')
+        return 62;
+    if (c == '/')
+        return 63;
     return -1;
 }
 
 int onvif_base64_decode(const char *in, size_t in_len, uint8_t *out, size_t out_size)
 {
-    size_t o = 0;
-    uint32_t acc = 0;
-    int bits = 0;
+    size_t   o    = 0;
+    uint32_t acc  = 0;
+    int      bits = 0;
     for (size_t i = 0; i < in_len; i++) {
         if (in[i] == '=' || in[i] == '\r' || in[i] == '\n' || in[i] == ' ') {
             continue;
@@ -123,15 +129,17 @@ int onvif_base64_decode(const char *in, size_t in_len, uint8_t *out, size_t out_
 int onvif_base64_encode(const uint8_t *in, size_t in_len, char *out, size_t out_size)
 {
     static const char tbl[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-    size_t o = 0;
+    size_t            o     = 0;
     for (size_t i = 0; i < in_len; i += 3) {
         if (o + 5 >= out_size) {
             return -1;
         }
-        uint32_t v = (uint32_t)in[i] << 16;
-        int rem = (int)(in_len - i);
-        if (rem > 1) v |= (uint32_t)in[i + 1] << 8;
-        if (rem > 2) v |= in[i + 2];
+        uint32_t v   = (uint32_t)in[i] << 16;
+        int      rem = (int)(in_len - i);
+        if (rem > 1)
+            v |= (uint32_t)in[i + 1] << 8;
+        if (rem > 2)
+            v |= in[i + 2];
         out[o++] = tbl[(v >> 18) & 63];
         out[o++] = tbl[(v >> 12) & 63];
         out[o++] = rem > 1 ? tbl[(v >> 6) & 63] : '=';
@@ -152,19 +160,19 @@ int onvif_base64_encode(const uint8_t *in, size_t in_len, char *out, size_t out_
  *  `tag` (namespace prefix tolerated), into out. */
 static bool element_text(const char *body, const char *tag, char *out, size_t n)
 {
-    size_t tag_len = strlen(tag);
-    const char *p = body;
+    size_t      tag_len = strlen(tag);
+    const char *p       = body;
     while ((p = strstr(p, "<")) != NULL) {
         const char *name = p + 1;
-        const char *end = name;
+        const char *end  = name;
         while (*end && *end != '>' && *end != ' ' && *end != '/') {
             end++;
         }
-        size_t name_len = (size_t)(end - name);
-        const char *local = name_len > tag_len + 1 && name[name_len - tag_len - 1] == ':'
-                                ? name + name_len - tag_len
-                                : name;
-        size_t local_len = (size_t)(end - local);
+        size_t      name_len  = (size_t)(end - name);
+        const char *local     = name_len > tag_len + 1 && name[name_len - tag_len - 1] == ':'
+                                    ? name + name_len - tag_len
+                                    : name;
+        size_t      local_len = (size_t)(end - local);
         if (local_len == tag_len && strncmp(local, tag, tag_len) == 0) {
             const char *gt = strchr(end, '>');
             if (!gt) {
@@ -174,7 +182,7 @@ static bool element_text(const char *body, const char *tag, char *out, size_t n)
                 return false; /* empty element */
             }
             const char *text = gt + 1;
-            const char *lt = strchr(text, '<');
+            const char *lt   = strchr(text, '<');
             if (!lt) {
                 return false;
             }
@@ -206,13 +214,13 @@ bool onvif_wsse_parse_created(const char *created, int64_t *out_unix)
     if (mo <= 2) {
         yy--;
     }
-    int64_t era = (yy >= 0 ? yy : yy - 399) / 400;
-    int64_t yoe = yy - era * 400;
-    int64_t mp  = (mo + 9) % 12;
-    int64_t doy = (153 * mp + 2) / 5 + d - 1;
-    int64_t doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
+    int64_t era  = (yy >= 0 ? yy : yy - 399) / 400;
+    int64_t yoe  = yy - era * 400;
+    int64_t mp   = (mo + 9) % 12;
+    int64_t doy  = (153 * mp + 2) / 5 + d - 1;
+    int64_t doe  = yoe * 365 + yoe / 4 - yoe / 100 + doy;
     int64_t days = era * 146097 + doe - 719468;
-    *out_unix = days * 86400 + (int64_t)h * 3600 + (int64_t)mi * 60 + s;
+    *out_unix    = days * 86400 + (int64_t)h * 3600 + (int64_t)mi * 60 + s;
     return true;
 }
 
@@ -226,9 +234,9 @@ static bool ct_memeq(const uint8_t *a, const uint8_t *b, size_t n)
     return diff == 0;
 }
 
-onvif_wsse_status_t onvif_wsse_verify(const char *envelope, const char *password,
-                                      int64_t now_unix, int window_secs, bool allow_text,
-                                      onvif_wsse_nonce_cache_t *cache)
+onvif_wsse_status_t onvif_wsse_verify(const char *envelope, const char *username,
+                                      const char *password, int64_t now_unix, int window_secs,
+                                      bool allow_text, onvif_wsse_nonce_cache_t *cache)
 {
     if (!envelope || !password || !*password) {
         return ONVIF_WSSE_BAD_DIGEST; /* fail-closed on empty password */
@@ -237,16 +245,19 @@ onvif_wsse_status_t onvif_wsse_verify(const char *envelope, const char *password
         return ONVIF_WSSE_NO_TOKEN;
     }
 
-    char username[64] = {0};
-    char pwd_raw[256] = {0};
-    char nonce_b64[256] = {0};
-    char created[40] = {0};
-    if (!element_text(envelope, "Username", username, sizeof username)) {
+    char username_val[64] = {0};
+    char pwd_raw[256]     = {0};
+    char nonce_b64[256]   = {0};
+    char created[40]      = {0};
+    if (!element_text(envelope, "Username", username_val, sizeof username_val)) {
         return ONVIF_WSSE_NO_TOKEN;
     }
+    if (username && *username && strcmp(username_val, username) != 0) {
+        return ONVIF_WSSE_BAD_DIGEST;
+    }
     bool has_password = element_text(envelope, "Password", pwd_raw, sizeof pwd_raw);
-    bool has_nonce = element_text(envelope, "Nonce", nonce_b64, sizeof nonce_b64);
-    bool has_created = element_text(envelope, "Created", created, sizeof created);
+    bool has_nonce    = element_text(envelope, "Nonce", nonce_b64, sizeof nonce_b64);
+    bool has_created  = element_text(envelope, "Created", created, sizeof created);
     if (!has_password) {
         return ONVIF_WSSE_NO_TOKEN;
     }
@@ -291,7 +302,7 @@ onvif_wsse_status_t onvif_wsse_verify(const char *envelope, const char *password
     }
 
     uint8_t payload[512];
-    size_t pl = 0;
+    size_t  pl = 0;
     if ((size_t)nonce_len + strlen(created) + strlen(password) + 1 > sizeof payload) {
         return ONVIF_WSSE_BAD_DIGEST;
     }
@@ -325,7 +336,7 @@ onvif_wsse_status_t onvif_wsse_verify(const char *envelope, const char *password
         unsigned slot = cache->next % ONVIF_WSSE_NONCE_SLOTS;
         memcpy(cache->nonce_hash[slot], nonce_hash, 20);
         cache->created_unix[slot] = created_unix;
-        cache->used[slot] = true;
+        cache->used[slot]         = true;
         cache->next++;
     }
 

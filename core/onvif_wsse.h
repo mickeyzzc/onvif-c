@@ -33,24 +33,25 @@ typedef struct {
 
 typedef enum {
     ONVIF_WSSE_OK = 0,
-    ONVIF_WSSE_NO_TOKEN,      /* request carries no UsernameToken            */
-    ONVIF_WSSE_BAD_DIGEST,    /* password mismatch (or malformed fields)    */
-    ONVIF_WSSE_STALE,         /* Created outside the freshness window       */
-    ONVIF_WSSE_REPLAY,        /* nonce seen before                          */
-    ONVIF_WSSE_TEXT_REJECTED  /* PasswordText presented while disallowed    */
+    ONVIF_WSSE_NO_TOKEN,     /* request carries no UsernameToken            */
+    ONVIF_WSSE_BAD_DIGEST,   /* password mismatch (or malformed fields)    */
+    ONVIF_WSSE_STALE,        /* Created outside the freshness window       */
+    ONVIF_WSSE_REPLAY,       /* nonce seen before                          */
+    ONVIF_WSSE_TEXT_REJECTED /* PasswordText presented while disallowed    */
 } onvif_wsse_status_t;
 
 /** Verify the UsernameToken inside a raw SOAP envelope (strstr-based,
  *  namespace-prefix tolerant — no XML parser).
  *
+ *  username      expected username (NULL = accept any).
  *  password      expected password (fail-closed on NULL/empty).
  *  window_secs   Created freshness window (<= 0 -> 300 s default).
  *  allow_text    also accept PasswordText (insecure without TLS).
  *  cache         nonce replay cache (NULL skips replay protection).
  */
-onvif_wsse_status_t onvif_wsse_verify(const char *envelope, const char *password,
-                                      int64_t now_unix, int window_secs, bool allow_text,
-                                      onvif_wsse_nonce_cache_t *cache);
+onvif_wsse_status_t onvif_wsse_verify(const char *envelope, const char *username,
+                                      const char *password, int64_t now_unix, int window_secs,
+                                      bool allow_text, onvif_wsse_nonce_cache_t *cache);
 
 /** Parse "YYYY-MM-DDTHH:MM:SS[.frac]Z" into unix seconds; false on
  *  malformed input (the caller treats that as a stale token). */

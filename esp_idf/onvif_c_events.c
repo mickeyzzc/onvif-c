@@ -269,6 +269,10 @@ static esp_err_t events_service_handler(httpd_req_t *req)
 {
     char     *body = ev_read_body(req);
     esp_err_t ret;
+    if (body && !onvif_c_auth_gate(req, body)) {
+        free(body);
+        return ESP_OK;
+    }
     if (!body) {
         return ev_fault(req, "ter:ActionNotSupported", "empty/oversized body");
     }

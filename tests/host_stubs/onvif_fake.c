@@ -202,8 +202,17 @@ esp_err_t httpd_resp_set_type(httpd_req_t *r, const char *type)
     return ESP_OK;
 }
 
+esp_err_t httpd_resp_set_status(httpd_req_t *r, const char *status)
+{
+    snprintf(r->status, sizeof(r->status), "%s", status);
+    return ESP_OK;
+}
+
 esp_err_t httpd_resp_send(httpd_req_t *r, const char *buf, size_t len)
 {
+    if (r->status[0] == '\0') {
+        snprintf(r->status, sizeof(r->status), "200 OK");
+    }
     if (len > FAKE_HTTPD_RESP_MAX - 1 - r->resp_len) {
         len = FAKE_HTTPD_RESP_MAX - 1 - r->resp_len;
     }
