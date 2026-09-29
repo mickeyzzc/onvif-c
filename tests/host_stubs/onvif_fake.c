@@ -334,12 +334,17 @@ void vTaskDelete(TaskHandle_t task)
     (void)task;
 }
 
+int onvif_fake_delay_max_ticks = 0;
+
 void vTaskDelay(UBaseType_t ticks)
 {
     /* Retry paths pass huge tick counts; cap the wall-clock so tests with
      * deliberate failure injection still run in milliseconds. */
     unsigned ms = ticks > 10 ? 10 : ticks;
     usleep(ms * 1000);
+    if ((int)ticks > onvif_fake_delay_max_ticks) {
+        onvif_fake_delay_max_ticks = (int)ticks;
+    }
 }
 
 void onvif_fake_task_fail_create_once(void)

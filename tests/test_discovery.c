@@ -27,6 +27,11 @@ static const char *cb_uuid(void)
     return T_UUID;
 }
 
+static const char *cb_ip_none(void)
+{
+    return NULL; /* simulates "no IP yet" (netif down / DHCP pending) */
+}
+
 static const char *cb_ip(void)
 {
     if (g_ip_mode == 1) {
@@ -301,6 +306,33 @@ void test_discovery(void)
         onvif_c_stop();
         onvif_fake_task_drain();
         CHECK(onvif_fake_wdt_deleted == 1, "unsubscribe on task exit");
+    }
+
+    /* wdt-watched discovery must never sleep >1s in one vTaskDelay:
+     * the no-IP retry loop is sliced into 1s chunks with a feed between
+     * (regression: unit-2 crash loop 2026-09-28, offender onvif_disc). */
+    onvif_fake_httpd_reset();
+    onvif_fake_net_reset();
+    onvif_fake_wdt_added       = 0;
+    onvif_fake_wdt_feeds       = 0;
+    onvif_fake_delay_max_ticks = 0;
+    {
+        onvif_c_config_t cfg_n    = disco_cfg();
+        cfg_n.ip                  = cb_ip_none; /* no IP -> retry loop */
+        cfg_n.wdt_watch_discovery = true;
+        CHECK(onvif_c_start(hd, &cfg_n) == ESP_OK, "no-ip wdt start ok");
+        int spins = 0;
+        while (onvif_fake_wdt_added == 0 && spins < 200) {
+            usleep(10000);
+            spins++;
+        }
+        CHECK(onvif_fake_wdt_added == 1, "no-ip discovery subscribed to wdt");
+        usleep(300000); /* several sliced retry cycles */
+        CHECK(onvif_fake_wdt_feeds > 1, "no-ip retry path keeps feeding");
+        CHECK(onvif_fake_delay_max_ticks <= 1000, /* stub pdMS_TO_TICKS identity */
+              "wdt-watched task never sleeps >1s per delay");
+        onvif_c_stop();
+        onvif_fake_task_drain();
     }
     onvif_fake_httpd_reset();
     onvif_fake_net_reset();
