@@ -47,6 +47,28 @@ static TaskHandle_t s_disc_task = NULL;
 /*  Discovery task                                                     */
 /* ------------------------------------------------------------------ */
 
+#if ONVIF_C_HAVE_WDT
+static bool s_disc_wdt_watched = false; /* task subscribed to the TWDT */
+#endif
+
+/* Sleep `ms` in <=1s slices, feeding the task watchdog between slices.
+ * A wdt-watched task must never block in one long vTaskDelay: a 10s retry
+ * sleep against a 10s TWDT timeout is guaranteed starvation (seen live as
+ * the "No IP yet" loop during the 2026-09-28 unit-2 crash storm). */
+static void onvif_disc_sleep_ms(int ms)
+{
+    while (ms > 0) {
+        int chunk = ms > 1000 ? 1000 : ms;
+        vTaskDelay(pdMS_TO_TICKS(chunk));
+        ms -= chunk;
+#if ONVIF_C_HAVE_WDT
+        if (s_disc_wdt_watched) {
+            esp_task_wdt_reset();
+        }
+#endif
+    }
+}
+
 static void onvif_c_discovery_task(void *arg)
 {
     (void)arg;
@@ -57,10 +79,9 @@ static void onvif_c_discovery_task(void *arg)
     ESP_LOGI(TAG, "Device UUID: %s", device_uuid);
 
 #if ONVIF_C_HAVE_WDT
-    bool wdt_watched = false;
     if (cfg->wdt_watch_discovery) {
         if (esp_task_wdt_add(NULL) == ESP_OK) {
-            wdt_watched = true;
+            s_disc_wdt_watched = true;
             ESP_LOGI(TAG, "Discovery task subscribed to the task watchdog");
         } else {
             ESP_LOGW(TAG, "Task watchdog subscribe failed (CONFIG_ESP_TASK_WDT?)");
@@ -86,7 +107,7 @@ static void onvif_c_discovery_task(void *arg)
         }
 
 #if ONVIF_C_HAVE_WDT
-        if (wdt_watched) {
+        if (s_disc_wdt_watched) {
             esp_task_wdt_reset();
         }
 #endif
@@ -99,7 +120,7 @@ static void onvif_c_discovery_task(void *arg)
         sock = socket(AF_INET, SOCK_DGRAM, 0);
         if (sock < 0) {
             ESP_LOGW(TAG, "Failed to create socket, retrying in 10s");
-            vTaskDelay(pdMS_TO_TICKS(10000));
+            onvif_disc_sleep_ms(10000);
             continue;
         }
 
@@ -116,7 +137,7 @@ static void onvif_c_discovery_task(void *arg)
             ESP_LOGW(TAG, "Failed to bind port %d, retrying in 10s", ONVIF_DISCOVERY_PORT);
             close(sock);
             sock = -1;
-            vTaskDelay(pdMS_TO_TICKS(10000));
+            onvif_disc_sleep_ms(10000);
             continue;
         }
 
@@ -126,7 +147,7 @@ static void onvif_c_discovery_task(void *arg)
             ESP_LOGW(TAG, "No IP yet, retrying in 10s");
             close(sock);
             sock = -1;
-            vTaskDelay(pdMS_TO_TICKS(10000));
+            onvif_disc_sleep_ms(10000);
             continue;
         }
 
@@ -138,7 +159,7 @@ static void onvif_c_discovery_task(void *arg)
             ESP_LOGW(TAG, "Failed to join multicast on %s, retrying in 10s", local_ip);
             close(sock);
             sock = -1;
-            vTaskDelay(pdMS_TO_TICKS(10000));
+            onvif_disc_sleep_ms(10000);
             continue;
         }
         ESP_LOGI(TAG, "Joined multicast %s on %s", ONVIF_MULTICAST_GROUP, local_ip);
@@ -187,7 +208,7 @@ static void onvif_c_discovery_task(void *arg)
             }
 
 #if ONVIF_C_HAVE_WDT
-            if (wdt_watched) {
+            if (s_disc_wdt_watched) {
                 esp_task_wdt_reset();
             }
 #endif
@@ -272,7 +293,8 @@ static void onvif_c_discovery_task(void *arg)
     if (sock >= 0)
         close(sock);
 #if ONVIF_C_HAVE_WDT
-    if (wdt_watched) {
+    if (s_disc_wdt_watched) {
+        s_disc_wdt_watched = false;
         esp_task_wdt_delete(NULL);
     }
 #endif

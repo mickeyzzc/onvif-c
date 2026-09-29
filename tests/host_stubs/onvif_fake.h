@@ -52,9 +52,12 @@ void onvif_fake_task_drain(void);
 
 /* ---- virtual UDP network ---- */
 void onvif_fake_net_reset(void);
-void onvif_fake_net_fail_socket_once(void);
-void onvif_fake_net_fail_bind_once(void);
-void onvif_fake_net_fail_membership_once(void);
+/* Largest tick count ever passed to vTaskDelay since the last reset.
+ * The wdt-watched discovery task must never sleep >1s in one call. */
+extern int onvif_fake_delay_max_ticks;
+void       onvif_fake_net_fail_socket_once(void);
+void       onvif_fake_net_fail_bind_once(void);
+void       onvif_fake_net_fail_membership_once(void);
 /* Queue an inbound datagram on every open fake socket (sender as given). */
 void onvif_fake_net_inject(const char *data, const char *from_ip, unsigned from_port);
 int  onvif_fake_net_send_count(void);
