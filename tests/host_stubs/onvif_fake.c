@@ -12,6 +12,7 @@
 #include <stdio.h>
 #include <unistd.h>
 #include "freertos/semphr.h"
+#include "esp_task_wdt.h"
 
 /* ------------------------------------------------------------------ */
 /*  esp_err_to_name                                                    */
@@ -179,14 +180,19 @@ int httpd_req_recv(httpd_req_t *r, char *buf, size_t buf_len)
         g_recv_fail_once = 0;
         return -1;
     }
-    size_t n = r->inject_len < buf_len ? r->inject_len : buf_len;
+    /* Serve the injected stream from where the last call left off, so a
+     * handler that loops over recv() (as required by #7) reassembles the
+     * body; a one-shot cap simulates a short TCP segment. */
+    size_t avail = r->inject_len - r->inject_off;
+    size_t n     = avail < buf_len ? avail : buf_len;
     if (g_recv_short_once > 0) {
         if ((size_t)g_recv_short_once < n) {
             n = (size_t)g_recv_short_once;
         }
         g_recv_short_once = 0;
     }
-    memcpy(buf, r->inject_body, n);
+    memcpy(buf, r->inject_body + r->inject_off, n);
+    r->inject_off += n;
     return (int)n;
 }
 
@@ -657,4 +663,32 @@ char *inet_ntoa(struct in_addr in)
     char       *buf = bufs[rot++ & 3];
     raw_to_ip(in.s_addr, buf, sizeof(bufs[0]));
     return buf;
+}
+
+/* ------------------------------------------------------------------ */
+/*  Fake task watchdog (counters only)                                 */
+/* ------------------------------------------------------------------ */
+
+int onvif_fake_wdt_added;
+int onvif_fake_wdt_feeds;
+int onvif_fake_wdt_deleted;
+
+esp_err_t esp_task_wdt_add(void *task_handle)
+{
+    (void)task_handle;
+    onvif_fake_wdt_added++;
+    return ESP_OK;
+}
+
+esp_err_t esp_task_wdt_reset(void)
+{
+    onvif_fake_wdt_feeds++;
+    return ESP_OK;
+}
+
+esp_err_t esp_task_wdt_delete(void *task_handle)
+{
+    (void)task_handle;
+    onvif_fake_wdt_deleted++;
+    return ESP_OK;
 }

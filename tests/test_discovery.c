@@ -10,6 +10,7 @@
 #include "../include/onvif_c.h"
 #include "test_util.h"
 #include "onvif_fake.h"
+#include "esp_task_wdt.h"
 #include <stdlib.h>
 #include <unistd.h>
 
@@ -253,6 +254,64 @@ void test_discovery(void)
         CHECK(onvif_c_start(hd, &cfg_mdns) == ESP_OK, "start with unavailable mDNS still ok");
         CHECK(onvif_fake_net_wait_send("discovery/Hello", 8000) >= 0,
               "Hello despite mDNS being unavailable");
+        onvif_c_stop();
+        onvif_fake_task_drain();
+    }
+
+    /* oversized scopes would overflow the 2048-byte stack buffer: no
+     * Hello and no ProbeMatches may leave the board (#6 stack path) */
+    onvif_fake_httpd_reset();
+    onvif_fake_net_reset();
+    {
+        static char big_scopes[4000];
+        memset(big_scopes, 'S', sizeof(big_scopes) - 1);
+        big_scopes[sizeof(big_scopes) - 1] = '\0';
+        onvif_c_config_t cfg_big           = disco_cfg();
+        cfg_big.scopes                     = big_scopes;
+        CHECK(onvif_c_start(hd, &cfg_big) == ESP_OK, "start with huge scopes");
+        usleep(150000); /* initial + periodic Hello windows */
+        onvif_fake_net_inject(probe_body("urn:uuid:probe-big"), "192.0.2.99", 5010);
+        usleep(150000);
+        CHECK(onvif_fake_net_send_count() == 0, "truncated discovery frames are never sent");
+        onvif_c_stop();
+        onvif_fake_task_drain();
+    }
+
+    /* watchdog: discovery task feeds only when wdt_watch_discovery set */
+    onvif_fake_httpd_reset();
+    onvif_fake_net_reset();
+    onvif_fake_wdt_added   = 0;
+    onvif_fake_wdt_feeds   = 0;
+    onvif_fake_wdt_deleted = 0;
+    {
+        onvif_c_config_t cfg_w    = disco_cfg();
+        cfg_w.wdt_watch_discovery = true;
+        CHECK(onvif_c_start(hd, &cfg_w) == ESP_OK, "wdt start ok");
+        int spins = 0;
+        while (onvif_fake_wdt_added == 0 && spins < 200) {
+            usleep(10000);
+            spins++;
+        }
+        CHECK(onvif_fake_wdt_added == 1, "discovery task subscribed to wdt");
+        int f0 = onvif_fake_wdt_feeds;
+        CHECK(onvif_fake_net_wait_send("discovery/Hello", 8000) >= 0,
+              "Hello still flows while wdt-watched");
+        usleep(100000); /* several 2 ms loop iterations */
+        CHECK(onvif_fake_wdt_feeds > f0, "watched discovery task feeds");
+        onvif_c_stop();
+        onvif_fake_task_drain();
+        CHECK(onvif_fake_wdt_deleted == 1, "unsubscribe on task exit");
+    }
+    onvif_fake_httpd_reset();
+    onvif_fake_net_reset();
+    onvif_fake_wdt_added = 0;
+    onvif_fake_wdt_feeds = 0;
+    {
+        onvif_c_config_t cfg_w = disco_cfg(); /* flag default false */
+        CHECK(onvif_c_start(hd, &cfg_w) == ESP_OK, "non-wdt start ok");
+        usleep(50000);
+        CHECK(onvif_fake_wdt_added == 0, "no subscribe without the flag");
+        CHECK(onvif_fake_wdt_feeds == 0, "no feeds without the flag");
         onvif_c_stop();
         onvif_fake_task_drain();
     }

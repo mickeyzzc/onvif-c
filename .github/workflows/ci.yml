@@ -29,6 +29,18 @@ jobs:
       # builds both host suites with gcc --coverage; fails under 80%
       - run: tests/coverage.sh 80
 
+  sanitizers:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # the stub harness drives the real port layer, so ASan/UBSan cover the
+      # shipped esp_idf/ code — length-arithmetic regressions trap here
+      - run: sudo apt-get update && sudo apt-get install -y clang
+      - run: CC=clang EXTRA_CFLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer" tests/run.sh
+        env:
+          ASAN_OPTIONS: detect_leaks=0
+          UBSAN_OPTIONS: print_stacktrace=1:halt_on_error=1
+
   golden:
     runs-on: ubuntu-latest
     strategy:

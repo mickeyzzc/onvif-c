@@ -38,7 +38,7 @@ void app_main(void)
         .manufacturer     = "MiBee",
         .model            = "MiBeeCam",
         .hardware_id      = "ESP32-S3",
-        .firmware_version = "v0.2.0",
+        .firmware_version = "v0.1.0",
         .serial           = "aabbccddeeff",
         .uuid             = "f472b01e-0000-1000-8000-aabbccddeeff",
         .ip               = my_ip,

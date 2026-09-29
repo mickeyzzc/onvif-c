@@ -21,6 +21,7 @@ typedef struct httpd_req {
     /* ---- harness fields ---- */
     const char *inject_body; /* stream served by httpd_req_recv        */
     size_t      inject_len;
+    size_t      inject_off;      /* consumed so far (partial-read loops)   */
     int         recv_short_once; /* >0: next recv returns at most this     */
     int         recv_fail_once;  /* 1: next recv returns -1                */
     int         recv_calls;
