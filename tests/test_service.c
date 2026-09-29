@@ -12,11 +12,21 @@
 #include "../include/onvif_c.h"
 #include "../esp_idf/onvif_c_port.h"
 #include "test_util.h"
+#include "../core/onvif_wsse.h"
 #include "onvif_fake.h"
 #include <stdlib.h>
 
 /* ---- controllable callbacks ---- */
 
+static const char *cb_auth_password(void)
+{
+    return "s3cret";
+}
+static int  g_keyframe_calls;
+static void cb_keyframe(void)
+{
+    g_keyframe_calls++;
+}
 static int g_gate    = 1;
 static int g_fps     = 12;
 static int g_ip_mode = 0;  /* 0 good, 1 zero-always */
@@ -86,6 +96,7 @@ static onvif_c_config_t base_cfg(void)
     c.ip               = cb_ip;
     c.stream_uri       = cb_stream_uri;
     c.frame_rate       = cb_frame_rate;
+    c.on_keyframe      = cb_keyframe;
     c.http_port        = 80;
     return c;
 }
@@ -149,7 +160,7 @@ void test_service(void)
     reset_env();
     cfg = base_cfg(); /* events_enabled == NULL */
     CHECK(onvif_c_start(hd, &cfg) == ESP_OK, "start OK");
-    CHECK(onvif_fake_httpd_register_count() == 2, "device+media registered");
+    CHECK(onvif_fake_httpd_register_count() == 3, "device+media+media2 registered");
     CHECK(onvif_fake_httpd_find("/onvif/events_service") == NULL,
           "no events handler without events_enabled");
     CHECK(onvif_c_version() == ONVIF_C_VERSION, "version macro exported");
@@ -253,9 +264,82 @@ void test_service(void)
     CHECK(post(u, "<trt:GetSnapshotUri/>", &r) == ESP_OK, "snapshot handler ok");
     CHECK_SUB(r.resp, "<tt:Uri>http://" T_IP "/cap</tt:Uri>", "explicit snapshot uri wins");
 
-    /* ---- faults and body edge cases ---- */
+    /* ---- media completion (issue #14) ---- */
     CHECK(post(u, "<trt:GetVideoEncoderConfigurations/>", &r) == ESP_OK,
-          "unknown media action handled");
+          "encoder configurations handled");
+    CHECK_SUB(r.resp, "<trt:GetVideoEncoderConfigurationsResponse>", "encoder configs envelope");
+    CHECK_SUB(r.resp, "<tt:Encoding>JPEG</tt:Encoding>", "encoder configs encoding");
+
+    CHECK(post(u,
+               "<trt:GetVideoEncoderConfiguration><trt:ConfigurationToken>t</"
+               "trt:ConfigurationToken></trt:GetVideoEncoderConfiguration>",
+               &r) == ESP_OK,
+          "single encoder configuration handled");
+    CHECK_SUB(r.resp, "GetVideoEncoderConfigurationResponse", "single encoder config envelope");
+
+    CHECK(post(u, "<trt:GetVideoEncoderConfigurationOptions/>", &r) == ESP_OK,
+          "encoder options handled");
+    CHECK_SUB(r.resp,
+              "<tt:FrameRateRange><tt:Min>1</tt:Min><tt:Max>12</tt:Max></tt:FrameRateRange>",
+              "encoder options ranges");
+
+    CHECK(post(u, "<trt:SetVideoEncoderConfiguration/>", &r) == ESP_OK,
+          "set encoder configuration acknowledged");
+    CHECK_SUB(r.resp, "SetVideoEncoderConfigurationResponse", "set encoder ack");
+
+    CHECK(post(u, "<trt:GetGuaranteedNumberOfVideoEncoderInstances/>", &r) == ESP_OK,
+          "guaranteed instances handled");
+    CHECK_SUB(r.resp, "<trt:TotalInstances>1</trt:TotalInstances>", "one guaranteed instance");
+
+    g_keyframe_calls = 0;
+    CHECK(post(u, "<trt:SetSynchronizationPoint/>", &r) == ESP_OK, "sync point handled");
+    CHECK_SUB(r.resp, "SetSynchronizationPointResponse", "sync point ack");
+    CHECK(g_keyframe_calls == 1, "on_keyframe seam fired");
+
+    CHECK(post(u, "<trt:GetServiceCapabilities/>", &r) == ESP_OK, "media caps handled");
+    CHECK_SUB(r.resp, "RTP_Multicast=\"false\"", "multicast explicitly off");
+
+    CHECK(post(u, "<trt:GetVideoSources/>", &r) == ESP_OK, "video sources handled");
+    CHECK_SUB(r.resp, "GetVideoSourcesResponse", "video sources envelope");
+
+    /* ---- device completion (issue #13) ---- */
+    u = onvif_fake_httpd_find("/onvif/device_service");
+    CHECK(u != NULL, "device handler still registered");
+    CHECK(post(u, "<tds:GetServices/>", &r) == ESP_OK, "get services handled");
+    CHECK_SUB(r.resp, "http://www.onvif.org/ver10/media/wsdl</tds:Namespace>", "media listed");
+    CHECK_SUB(r.resp, "/onvif/media_service</tds:XAddr>", "media xaddr");
+
+    CHECK(post(u, "<tds:GetScopes/>", &r) == ESP_OK, "get scopes handled");
+    CHECK_SUB(r.resp, "<tt:ScopeDef>Fixed</tt:ScopeDef>", "scopes element form");
+    CHECK_SUB(r.resp, "onvif://www.onvif.org/name/", "scopes content");
+
+    CHECK(post(u, "<tds:SystemReboot/>", &r) == ESP_OK, "reboot handled");
+    CHECK_SUB(r.resp, "<tds:Message>Device rebooting</tds:Message>", "reboot message");
+
+    CHECK(post(u, "<tds:SetSystemDateAndTime/>", &r) == ESP_OK, "set date handled");
+    CHECK_SUB(r.resp, "SetSystemDateAndTimeResponse", "set date ack");
+
+    CHECK(post(u, "<tds:GetServiceCapabilities/>", &r) == ESP_OK, "device caps handled");
+    CHECK_SUB(r.resp, "Network=\"false\"", "device caps network off");
+
+    /* ---- faults and body edge cases ---- */
+    /* ---- Media2 minimal face (issue #18) ---- */
+    u = onvif_fake_httpd_find("/onvif/media2_service");
+    CHECK(u != NULL, "media2 handler registered");
+    CHECK(post(u, "<tr2:GetProfiles/>", &r) == ESP_OK, "media2 profiles handled");
+    CHECK_SUB(r.resp, "<tr2:GetProfilesResponse>", "media2 profiles envelope");
+    CHECK_SUB(r.resp, "VideoEncoder_1", "media2 configuration set");
+    g_keyframe_calls = 0;
+    CHECK(post(u, "<tr2:SetSynchronizationPoint/>", &r) == ESP_OK, "media2 sync handled");
+    CHECK_SUB(r.resp, "tr2:SetSynchronizationPointResponse", "media2 sync ack");
+    CHECK(g_keyframe_calls == 1, "media2 on_keyframe seam fired");
+    CHECK(post(u, "<tr2:GetStreamUri/>", &r) == ESP_OK, "media2 stream uri handled");
+    CHECK_SUB(r.resp, "<tr2:Uri>", "media2 plain uri flavor");
+    u = onvif_fake_httpd_find("/onvif/device_service");
+    CHECK(post(u, "<tds:GetServices/>", &r) == ESP_OK, "get services again");
+    CHECK_SUB(r.resp, "http://www.onvif.org/ver20/media/wsdl", "media2 advertised");
+
+    CHECK(post(u, "<trt:GetNotARealAction/>", &r) == ESP_OK, "unknown media action handled");
     CHECK_SUB(r.resp, "ter:ActionNotSupported", "unknown media action fault");
 
     CHECK(onvif_fake_httpd_invoke(u, NULL, 0, &r) == ESP_OK, "empty body handled");
@@ -335,5 +419,72 @@ void test_service(void)
     cfg = base_cfg();
     onvif_fake_task_fail_create_once();
     CHECK(onvif_c_start(hd, &cfg) == ESP_FAIL, "discovery task creation failure propagates");
-    CHECK(onvif_fake_httpd_register_count() == 2, "handlers stay registered when discovery fails");
+    CHECK(onvif_fake_httpd_register_count() == 3, "handlers stay registered when discovery fails");
+
+    /* ---- authentication gate (issue #17) ---- */
+    onvif_fake_httpd_reset();
+    reset_env();
+    cfg               = base_cfg();
+    cfg.auth_password = cb_auth_password;
+    CHECK(onvif_c_start(hd, &cfg) == ESP_OK, "start with auth ok");
+    u = onvif_fake_httpd_find("/onvif/device_service");
+
+    /* No token -> 401 + NotAuthorized fault. */
+    CHECK(post(u, "<tds:GetDeviceInformation/>", &r) == ESP_OK, "no-token handled");
+    CHECK_SUB(r.status, "401", "no-token gets 401");
+    CHECK_SUB(r.resp, "NotAuthorized", "no-token fault body");
+
+    /* Pre-auth action open per the Core spec. */
+    CHECK(post(u, "<tds:GetSystemDateAndTime/>", &r) == ESP_OK, "pre-auth handled");
+    CHECK_SUB(r.status, "200", "GetSystemDateAndTime open");
+    CHECK_SUB(r.resp, "GetSystemDateAndTimeResponse", "pre-auth response");
+
+    /* Valid digest accepted (built with the wsse primitives). */
+    {
+        uint8_t     d[20];
+        char        digest_b64[32];
+        char        env[1024];
+        const char *created = "2026-09-29T10:00:00Z";
+        int64_t     now_s   = 0;
+        onvif_wsse_parse_created(created, &now_s);
+        onvif_fake_time_set((time_t)now_s);
+        uint8_t payload[128];
+        size_t  pl = 0;
+        memcpy(payload, "12345678", 8);
+        pl = 8;
+        memcpy(payload + pl, created, strlen(created));
+        pl += strlen(created);
+        memcpy(payload + pl, "s3cret", 6);
+        pl += 6;
+        onvif_sha1(payload, pl, d);
+        onvif_base64_encode(d, 20, digest_b64, sizeof digest_b64);
+        snprintf(env, sizeof env,
+                 "<s:Envelope xmlns:s=\"http://www.w3.org/2003/05/soap-envelope\""
+                 " xmlns:wsse=\"http://docs.oasis-open.org/wss/2004/01/"
+                 "oasis-200401-wss-wssecurity-secext-1.0.xsd\">"
+                 "<s:Header><wsse:Security><wsse:UsernameToken>"
+                 "<wsse:Username>admin</wsse:Username>"
+                 "<wsse:Password Type=\"#PasswordDigest\">%s</wsse:Password>"
+                 "<wsse:Nonce>MTIzNDU2Nzg=</wsse:Nonce>"
+                 "<wsu:Created>%s</wsu:Created>"
+                 "</wsse:UsernameToken></wsse:Security></s:Header>"
+                 "<s:Body><tds:GetDeviceInformation/></s:Body></s:Envelope>",
+                 digest_b64, created);
+        CHECK(onvif_fake_httpd_invoke(u, env, strlen(env), &r) == ESP_OK, "digest request handled");
+        CHECK_SUB(r.status, "200", "valid digest gets 200");
+        CHECK_SUB(r.resp, "GetDeviceInformationResponse", "valid digest served");
+
+        /* Same envelope again -> replay rejected. */
+        CHECK(onvif_fake_httpd_invoke(u, env, strlen(env), &r) == ESP_OK, "replay handled");
+        CHECK_SUB(r.status, "401", "replayed nonce gets 401");
+    }
+
+    /* Media service behind the same gate. */
+    u = onvif_fake_httpd_find("/onvif/media_service");
+    CHECK(u != NULL, "media registered");
+    CHECK(post(u, "<trt:GetProfiles/>", &r) == ESP_OK, "media no-token handled");
+    CHECK_SUB(r.status, "401", "media no-token 401");
+
+    onvif_c_stop();
+    onvif_fake_task_drain();
 }

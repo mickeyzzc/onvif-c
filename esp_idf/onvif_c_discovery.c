@@ -230,7 +230,9 @@ static void onvif_c_discovery_task(void *arg)
 
             recv_buf[recv_len] = '\0';
 
-            if (!onvif_probe_is_probe(recv_buf)) {
+            bool is_resolve =
+                onvif_probe_is_resolve(recv_buf) && strstr(recv_buf, device_uuid) != NULL;
+            if (!onvif_probe_is_probe(recv_buf) && !is_resolve) {
                 continue;
             }
 
@@ -245,11 +247,15 @@ static void onvif_c_discovery_task(void *arg)
                 strncpy(relates_to, "urn:uuid:unknown", sizeof(relates_to) - 1);
             }
 
-            ESP_LOGI(TAG, "Received Probe from %s, sending ProbeMatches",
+            ESP_LOGI(TAG, "Received Probe/Resolve from %s, sending Matches",
                      inet_ntoa(sender_addr.sin_addr));
 
             char resp_buf[RESP_BUF_SIZE];
-            int  rl = onvif_probe_build_matches(resp_buf, sizeof(resp_buf), relates_to, device_uuid,
+            int  rl =
+                is_resolve
+                    ? onvif_probe_build_resolve_matches(resp_buf, sizeof(resp_buf), relates_to,
+                                                        device_uuid, ip_str, cfg->http_port)
+                    : onvif_probe_build_matches(resp_buf, sizeof(resp_buf), relates_to, device_uuid,
                                                 ip_str, cfg->http_port, onvif_c_cfg_scopes());
 
             if (rl <= 0 || (size_t)rl >= sizeof(resp_buf)) {
@@ -342,8 +348,37 @@ esp_err_t onvif_c_discovery_start(void)
     return ESP_OK;
 }
 
+/** Announce departure (WS-Discovery Bye) before the responder dies —
+ *  sent from a short-lived socket owned by the stop caller, so it works
+ *  even though the task's socket dies with the task (issue #16). */
+static void send_bye(void)
+{
+    const onvif_c_config_t *cfg = onvif_c_cfg();
+    const char             *ip  = onvif_c_cfg_ip();
+    if (!cfg || !cfg->uuid || strcmp(ip, "0.0.0.0") == 0) {
+        return;
+    }
+    const char *uuid = cfg->uuid();
+
+    int sock = socket(AF_INET, SOCK_DGRAM, 0);
+    if (sock < 0) {
+        return;
+    }
+    char               bye[1536];
+    int                bl = onvif_probe_build_bye(bye, sizeof(bye), uuid);
+    struct sockaddr_in dest;
+    memset(&dest, 0, sizeof(dest));
+    dest.sin_family      = AF_INET;
+    dest.sin_port        = htons(ONVIF_DISCOVERY_PORT);
+    dest.sin_addr.s_addr = inet_addr(ONVIF_MULTICAST_GROUP);
+    sendto(sock, bye, bl > 0 ? bl : 0, 0, (struct sockaddr *)&dest, sizeof(dest));
+    close(sock);
+    ESP_LOGI(TAG, "Bye sent (departure announced)");
+}
+
 esp_err_t onvif_c_discovery_stop(void)
 {
+    send_bye();
     TaskHandle_t task = s_disc_task;
     s_disc_task       = NULL;
     if (task) {
