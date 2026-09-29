@@ -63,6 +63,11 @@ int onvif_xml_event_properties(char *buf, size_t n);
 int onvif_xml_events_service_capabilities(char *buf, size_t n);
 int onvif_xml_events_sync_point_ack(char *buf, size_t n);
 
+/* ---- Media2 service (ver20, tr2 — minimal Profile-T subset, issue #18) ---- */
+int onvif_xml_media2_profiles(char *buf, size_t n, int frame_rate);
+int onvif_xml_media2_stream_uri(char *buf, size_t n, const char *uri);
+int onvif_xml_media2_sync_point_ack(char *buf, size_t n);
+
 /* ---- Faults ---- */
 int onvif_xml_fault_action_not_supported(char *buf, size_t n);
 /** WS-Security rejection fault (sent with HTTP 401). */

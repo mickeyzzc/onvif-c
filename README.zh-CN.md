@@ -27,6 +27,10 @@ Pull-Point 事件把相机交给 NVR，零第三方依赖，代码占用 ~10 KB�
   编译出局。
 - **无 XML 解析器、无动态状态** —— 动作识别 `strstr()`、响应生成
   `snprintf()`；仅每请求缓冲；运动事件生产者钩子非阻塞，传感器回调语境安全。
+- **Media2 最小面（ver20，tr2）**—— `/onvif/media2_service` 上的
+  `GetProfiles`（MediaProfile 的 ConfigurationSet 形态）、`GetStreamUri`
+  （纯 `Uri` 形态）、`SetSynchronizationPoint`（经 `on_keyframe` 接缝），
+  由 `GetServices` 广告——Profile-T 的入口路径。Media1 仍是全覆盖面。
 - **可选 WS-Security UsernameToken**（issue #17）—— 配置 `auth_password`
   后，除预认证动作 `GetSystemDateAndTime` 外所有请求必须携带有效
   PasswordDigest 令牌：自带 SHA-1 + Base64（无需 mbedtls）、常数时间比较、

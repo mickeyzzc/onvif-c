@@ -160,7 +160,7 @@ void test_service(void)
     reset_env();
     cfg = base_cfg(); /* events_enabled == NULL */
     CHECK(onvif_c_start(hd, &cfg) == ESP_OK, "start OK");
-    CHECK(onvif_fake_httpd_register_count() == 2, "device+media registered");
+    CHECK(onvif_fake_httpd_register_count() == 3, "device+media+media2 registered");
     CHECK(onvif_fake_httpd_find("/onvif/events_service") == NULL,
           "no events handler without events_enabled");
     CHECK(onvif_c_version() == ONVIF_C_VERSION, "version macro exported");
@@ -323,6 +323,22 @@ void test_service(void)
     CHECK_SUB(r.resp, "Network=\"false\"", "device caps network off");
 
     /* ---- faults and body edge cases ---- */
+    /* ---- Media2 minimal face (issue #18) ---- */
+    u = onvif_fake_httpd_find("/onvif/media2_service");
+    CHECK(u != NULL, "media2 handler registered");
+    CHECK(post(u, "<tr2:GetProfiles/>", &r) == ESP_OK, "media2 profiles handled");
+    CHECK_SUB(r.resp, "<tr2:GetProfilesResponse>", "media2 profiles envelope");
+    CHECK_SUB(r.resp, "VideoEncoder_1", "media2 configuration set");
+    g_keyframe_calls = 0;
+    CHECK(post(u, "<tr2:SetSynchronizationPoint/>", &r) == ESP_OK, "media2 sync handled");
+    CHECK_SUB(r.resp, "tr2:SetSynchronizationPointResponse", "media2 sync ack");
+    CHECK(g_keyframe_calls == 1, "media2 on_keyframe seam fired");
+    CHECK(post(u, "<tr2:GetStreamUri/>", &r) == ESP_OK, "media2 stream uri handled");
+    CHECK_SUB(r.resp, "<tr2:Uri>", "media2 plain uri flavor");
+    u = onvif_fake_httpd_find("/onvif/device_service");
+    CHECK(post(u, "<tds:GetServices/>", &r) == ESP_OK, "get services again");
+    CHECK_SUB(r.resp, "http://www.onvif.org/ver20/media/wsdl", "media2 advertised");
+
     CHECK(post(u, "<trt:GetNotARealAction/>", &r) == ESP_OK, "unknown media action handled");
     CHECK_SUB(r.resp, "ter:ActionNotSupported", "unknown media action fault");
 
@@ -403,7 +419,7 @@ void test_service(void)
     cfg = base_cfg();
     onvif_fake_task_fail_create_once();
     CHECK(onvif_c_start(hd, &cfg) == ESP_FAIL, "discovery task creation failure propagates");
-    CHECK(onvif_fake_httpd_register_count() == 2, "handlers stay registered when discovery fails");
+    CHECK(onvif_fake_httpd_register_count() == 3, "handlers stay registered when discovery fails");
 
     /* ---- authentication gate (issue #17) ---- */
     onvif_fake_httpd_reset();

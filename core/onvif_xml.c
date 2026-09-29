@@ -371,9 +371,15 @@ int onvif_xml_services(char *buf, size_t n, const char *ip, unsigned port, bool 
         }
     }
     off += snprintf(buf + off, n - off,
+                    "<tds:Service>"
+                    "<tds:Namespace>http://www.onvif.org/ver20/media/wsdl</tds:Namespace>"
+                    "<tds:XAddr>http://%s:%u/onvif/media2_service</tds:XAddr>"
+                    "<tds:Version><tt:Major>2</tt:Major><tt:Minor>5</tt:Minor></tds:Version>"
+                    "</tds:Service>"
                     "</tds:GetServicesResponse>"
                     "</soap:Body>"
-                    "</soap:Envelope>");
+                    "</soap:Envelope>",
+                    ip, port);
     return off;
 }
 
@@ -725,4 +731,78 @@ int onvif_xml_fault_not_authorized(char *buf, size_t n)
         "</soap:Fault>"
         "</soap:Body>"
         "</soap:Envelope>");
+}
+
+/* ------------------------------------------------------------------ */
+/*  Media2 service — minimal Profile-T subset (issue #18)              */
+/*  Namespace family switches to tr2 (ver20/media); the Media1 byte    */
+/*  set is untouched.                                                  */
+/* ------------------------------------------------------------------ */
+
+int onvif_xml_media2_profiles(char *buf, size_t n, int frame_rate)
+{
+    return snprintf(buf, n,
+                    "<?xml version=\"1.0\" encoding=\"utf-8\"?>"
+                    "<soap:Envelope"
+                    " xmlns:soap=\"http://www.w3.org/2003/05/soap-envelope\""
+                    " xmlns:tt=\"http://www.onvif.org/ver10/schema\""
+                    " xmlns:tr2=\"http://www.onvif.org/ver20/media/wsdl\">"
+                    "<soap:Body>"
+                    "<tr2:GetProfilesResponse>"
+                    "<tr2:Profiles token=\"MainStream\" fixed=\"true\">"
+                    "<tt:Name>MainStream</tt:Name>"
+                    "<tr2:Configurations>"
+                    "<tr2:VideoSource token=\"VideoSource_1\">"
+                    "<tt:Name>VideoSource_1</tt:Name>"
+                    "<tt:UseCount>1</tt:UseCount>"
+                    "<tt:SourceToken>VideoSource_1</tt:SourceToken>"
+                    "</tr2:VideoSource>"
+                    "<tr2:VideoEncoder token=\"VideoEncoder_1\">"
+                    "<tt:Name>VideoEncoder_1</tt:Name>"
+                    "<tt:UseCount>1</tt:UseCount>"
+                    "<tt:Encoding>JPEG</tt:Encoding>"
+                    "<tt:Resolution>"
+                    "<tt:Width>640</tt:Width>"
+                    "<tt:Height>480</tt:Height>"
+                    "</tt:Resolution>"
+                    "<tt:RateControl>"
+                    "<tt:FrameRateLimit>%d</tt:FrameRateLimit>"
+                    "<tt:BitrateLimit>4096</tt:BitrateLimit>"
+                    "</tt:RateControl>"
+                    "</tr2:VideoEncoder>"
+                    "</tr2:Configurations>"
+                    "</tr2:Profiles>"
+                    "</tr2:GetProfilesResponse>"
+                    "</soap:Body>"
+                    "</soap:Envelope>",
+                    frame_rate);
+}
+
+int onvif_xml_media2_stream_uri(char *buf, size_t n, const char *uri)
+{
+    return snprintf(buf, n,
+                    "<?xml version=\"1.0\" encoding=\"utf-8\"?>"
+                    "<soap:Envelope"
+                    " xmlns:soap=\"http://www.w3.org/2003/05/soap-envelope\""
+                    " xmlns:tr2=\"http://www.onvif.org/ver20/media/wsdl\">"
+                    "<soap:Body>"
+                    "<tr2:GetStreamUriResponse>"
+                    "<tr2:Uri>%s</tr2:Uri>"
+                    "</tr2:GetStreamUriResponse>"
+                    "</soap:Body>"
+                    "</soap:Envelope>",
+                    uri);
+}
+
+int onvif_xml_media2_sync_point_ack(char *buf, size_t n)
+{
+    return snprintf(buf, n,
+                    "<?xml version=\"1.0\" encoding=\"utf-8\"?>"
+                    "<soap:Envelope"
+                    " xmlns:soap=\"http://www.w3.org/2003/05/soap-envelope\""
+                    " xmlns:tr2=\"http://www.onvif.org/ver20/media/wsdl\">"
+                    "<soap:Body>"
+                    "<tr2:SetSynchronizationPointResponse/>"
+                    "</soap:Body>"
+                    "</soap:Envelope>");
 }

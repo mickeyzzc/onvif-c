@@ -38,6 +38,11 @@ English | [中文](README.zh-CN.md)
 - **No XML parser, no dynamic state** — action detection via `strstr()`,
   responses via `snprintf()`; per-request buffers only; the motion producer
   hook is non-blocking and safe from sensor callback context.
+- **Media2 minimal face (ver20, tr2)** — `GetProfiles` (MediaProfile
+  with the ConfigurationSet form), `GetStreamUri` (the plain `Uri`
+  flavor), `SetSynchronizationPoint` (via the `on_keyframe` seam) on
+  `/onvif/media2_service`, advertised in `GetServices` — the Profile-T
+  entry path. Media1 stays the full-coverage surface.
 - **Optional WS-Security UsernameToken** (issue #17) — set
   `auth_password` in the config and every action except the pre-auth
   `GetSystemDateAndTime` must carry a valid PasswordDigest token:

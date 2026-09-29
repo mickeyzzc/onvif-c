@@ -378,7 +378,10 @@ static const char *G_NEW_SERVICES =
     "/tt:Major><tt:Minor>5</tt:Minor></tds:Version></tds:Service><tds:Service><tds:Namespace>http"
     "://www.onvif.org/ver20/analytics/wsdl</tds:Namespace><tds:XAddr>http://192.0.2.134:8080/onvi"
     "f/analytics_service</tds:XAddr><tds:Version><tt:Major>2</tt:Major><tt:Minor>5</tt:Minor></td"
-    "s:Version></tds:Service></tds:GetServicesResponse></soap:Body></soap:Envelope>";
+    "s:Version></tds:Service><tds:Service><tds:Namespace>http://www.onvif.org/ver20/media/wsdl</t"
+    "ds:Namespace><tds:XAddr>http://192.0.2.134:8080/onvif/media2_service</tds:XAddr><tds:Version"
+    "><tt:Major>2</tt:Major><tt:Minor>5</tt:Minor></tds:Version></tds:Service></tds:GetServicesRe"
+    "sponse></soap:Body></soap:Envelope>";
 static const char *G_NEW_REBOOT =
     "<?xml version=\"1.0\" encoding=\"utf-8\"?><soap:Envelope "
     "xmlns:soap=\"http://www.w3.org/2003/05/s"
@@ -500,6 +503,38 @@ static const char *G_NEW_SCOPES =
     "ef><tt:ScopeItem>onvif://www.onvif.org/type/video_encoder</tt:ScopeItem></tt:Scopes><tt:Scop"
     "es><tt:ScopeDef>Fixed</tt:ScopeDef><tt:ScopeItem>onvif://www.onvif.org/name/MiBeeCam</tt:Sco"
     "peItem></tt:Scopes></tds:GetScopesResponse></soap:Body></soap:Envelope>";
+
+static const char *G_NEW_M2PROFILES =
+    "<?xml version=\"1.0\" encoding=\"utf-8\"?><soap:Envelope "
+    "xmlns:soap=\"http://www.w3.org/2003/05/s"
+    "oap-envelope\" xmlns:tt=\"http://www.onvif.org/ver10/schema\" "
+    "xmlns:tr2=\"http://www.onvif.org/v"
+    "er20/media/wsdl\"><soap:Body><tr2:GetProfilesResponse><tr2:Profiles token=\"MainStream\" "
+    "fixed="
+    "\"true\"><tt:Name>MainStream</tt:Name><tr2:Configurations><tr2:VideoSource "
+    "token=\"VideoSource_"
+    "1\"><tt:Name>VideoSource_1</tt:Name><tt:UseCount>1</tt:UseCount><tt:SourceToken>VideoSource_1"
+    "</tt:SourceToken></tr2:VideoSource><tr2:VideoEncoder token=\"VideoEncoder_1\"><tt:Name>VideoEn"
+    "coder_1</tt:Name><tt:UseCount>1</tt:UseCount><tt:Encoding>JPEG</tt:Encoding><tt:Resolution><"
+    "tt:Width>640</tt:Width><tt:Height>480</tt:Height></tt:Resolution><tt:RateControl><tt:FrameRa"
+    "teLimit>12</tt:FrameRateLimit><tt:BitrateLimit>4096</tt:BitrateLimit></tt:RateControl></tr2:"
+    "VideoEncoder></tr2:Configurations></tr2:Profiles></tr2:GetProfilesResponse></soap:Body></soa"
+    "p:Envelope>";
+
+static const char *G_NEW_M2STREAM =
+    "<?xml version=\"1.0\" encoding=\"utf-8\"?><soap:Envelope "
+    "xmlns:soap=\"http://www.w3.org/2003/05/s"
+    "oap-envelope\" "
+    "xmlns:tr2=\"http://www.onvif.org/ver20/media/wsdl\"><soap:Body><tr2:GetStreamUri"
+    "Response><tr2:Uri>rtsp://192.0.2.134:554/stream</tr2:Uri></tr2:GetStreamUriResponse></soap:B"
+    "ody></soap:Envelope>";
+
+static const char *G_NEW_M2SYNC =
+    "<?xml version=\"1.0\" encoding=\"utf-8\"?><soap:Envelope "
+    "xmlns:soap=\"http://www.w3.org/2003/05/s"
+    "oap-envelope\" "
+    "xmlns:tr2=\"http://www.onvif.org/ver20/media/wsdl\"><soap:Body><tr2:SetSynchroni"
+    "zationPointResponse/></soap:Body></soap:Envelope>";
 
 /* ------------------------------------------------------------------ */
 /*  WS-Security UsernameToken (issue #17)                              */
@@ -669,6 +704,16 @@ int main(void)
     CHECK(n > 0 && (size_t)n < sizeof g, "scopes built");
     CHECK_STR(g, G_NEW_SCOPES, "scopes golden");
     test_wsse();
+
+    n = onvif_xml_media2_profiles(g, sizeof g, 12);
+    CHECK(n > 0 && (size_t)n < sizeof g, "m2profiles built");
+    CHECK_STR(g, G_NEW_M2PROFILES, "m2profiles golden");
+    n = onvif_xml_media2_stream_uri(g, sizeof g, "rtsp://192.0.2.134:554/stream");
+    CHECK(n > 0 && (size_t)n < sizeof g, "m2stream built");
+    CHECK_STR(g, G_NEW_M2STREAM, "m2stream golden");
+    n = onvif_xml_media2_sync_point_ack(g, sizeof g);
+    CHECK(n > 0 && (size_t)n < sizeof g, "m2sync built");
+    CHECK_STR(g, G_NEW_M2SYNC, "m2sync golden");
 
     printf("%d checks, %d failures\n", checks, failures);
     return failures == 0 ? 0 : 1;

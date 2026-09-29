@@ -2,6 +2,15 @@
 
 ## [Unreleased]
 
+### Added — Media2 minimal face (issue #18)
+
+- Decision recorded: **minimal subset in** (not Media1-only, not full) —
+  `GetProfiles` / `GetStreamUri` / `SetSynchronizationPoint` under tr2 on
+  `/onvif/media2_service`, advertised via `GetServices`; ~1.6 KB of code
+  by sharing the Media1 profile template. Media1 bytes untouched.
+- GetStreamUri answers the Media2 plain-`Uri` flavor; sync point fires
+  the `on_keyframe` seam.
+
 ### Added — optional WS-Security UsernameToken (issue #17)
 
 - `core/onvif_wsse.c`: self-contained SHA-1 + Base64 + the ONVIF digest
