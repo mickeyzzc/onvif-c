@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.0] — 2026-09-29
+
+Compatibility: ONVIF_C_VERSION 100 → 200. New capability
+package — Device/Media/Events statics, WS-Discovery Bye/Resolve,
+WS-Security UsernameToken (PasswordDigest) with 401 challenge path,
+Media2 minimal face. No breaking API changes (additions only).
+
 ## [Unreleased]
 
 ### Added — Media2 minimal face (issue #18)
