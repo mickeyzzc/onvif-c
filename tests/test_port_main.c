@@ -15,6 +15,7 @@ int main(void)
     CHECK(!onvif_c_events_subscribed(), "no subscription before start");
 
     test_service();
+    test_time_config_service();
     test_events();
     test_discovery();
 
