@@ -18,7 +18,10 @@ English | [中文](README.zh-CN.md)
 - **SOAP Device/Media service** — the exact action set NVRs need to discover
   and add a camera: `GetSystemDateAndTime`, `GetDeviceInformation`,
   `GetCapabilities`, `GetServices`, `GetScopes`, `SetSystemDateAndTime`
-  (ack), `SystemReboot` (protocol answer), device `GetServiceCapabilities`,
+  (parsed and offered to the `on_set_system_date_and_time` hook — ack
+  placeholder without it), `SetNTP` (via the `on_set_ntp` hook — stays
+  ActionNotSupported without it), `SystemReboot` (protocol answer), device
+  `GetServiceCapabilities`,
   `GetProfiles`, `GetStreamUri`, `GetSnapshotUri`, `GetVideoSources`, the
   video encoder configuration family (get/get-options/set-ack), guaranteed
   instance count, `SetSynchronizationPoint` (fires the optional
@@ -117,6 +120,8 @@ outlive the service):
 | `frame_rate` | no | 15 | GetProfiles `FrameRateLimit`. |
 | `snapshot_uri` | no | derived `http://<ip>:<http_port>/api/capture` | GetSnapshotUri answer. |
 | `events_enabled` | no | NULL = feature absent | Runtime gate; when NULL the events service is neither registered nor advertised. |
+| `on_set_system_date_and_time` | no | NULL = ack only | Issue #22: the parsed request (DateTimeType Manual/NTP, DaylightSavings, POSIX timezone, UTC date/time — NULL when absent) is offered to the firmware; return true → ack, false → Sender fault. |
+| `on_set_ntp` | no | NULL = ActionNotSupported | Issue #22: `from_dhcp` plus the first NTPServer token (DNS name or IP literal; NULL when none); return true → ack, false → Sender fault. |
 | `http_port` | no | 80 | Flows into **every** advertised URI. |
 | `wdt_watch_discovery` | no | false | Subscribe the WS-Discovery task to the ESP-IDF task watchdog (`CONFIG_ESP_TASK_WDT`); a wedged discovery task stops feeding and the TWDT fires. |
 | `mdns_hostname`, `mdns_instance` | no | NULL = skip mDNS | instance defaults to `model`. |

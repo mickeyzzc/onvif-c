@@ -452,6 +452,39 @@ int onvif_xml_set_system_date_and_time_ack(char *buf, size_t n)
                     "</soap:Envelope>");
 }
 
+int onvif_xml_set_ntp_ack(char *buf, size_t n)
+{
+    return snprintf(buf, n,
+                    "<?xml version=\"1.0\" encoding=\"utf-8\"?>"
+                    "<soap:Envelope"
+                    " xmlns:soap=\"http://www.w3.org/2003/05/soap-envelope\""
+                    " xmlns:tds=\"http://www.onvif.org/ver10/device/wsdl\">"
+                    "<soap:Body>"
+                    "<tds:SetNTPResponse/>"
+                    "</soap:Body>"
+                    "</soap:Envelope>");
+}
+
+int onvif_xml_fault_sender(char *buf, size_t n, const char *text)
+{
+    return snprintf(buf, n,
+                    "<?xml version=\"1.0\" encoding=\"utf-8\"?>"
+                    "<soap:Envelope"
+                    " xmlns:soap=\"http://www.w3.org/2003/05/soap-envelope\">"
+                    "<soap:Body>"
+                    "<soap:Fault>"
+                    "<soap:Code>"
+                    "<soap:Value>soap:Sender</soap:Value>"
+                    "</soap:Code>"
+                    "<soap:Reason>"
+                    "<soap:Text xml:lang=\"en\">%s</soap:Text>"
+                    "</soap:Reason>"
+                    "</soap:Fault>"
+                    "</soap:Body>"
+                    "</soap:Envelope>",
+                    text ? text : "Invalid request");
+}
+
 int onvif_xml_device_service_capabilities(char *buf, size_t n)
 {
     return snprintf(buf, n,

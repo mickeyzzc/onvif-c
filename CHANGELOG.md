@@ -9,6 +9,19 @@ Media2 minimal face. No breaking API changes (additions only).
 
 ## [Unreleased]
 
+- `feat` time-management hooks (issue #22, MiBeeNvr clock-sync
+  integration): `SetSystemDateAndTime` is now parsed (DateTimeType
+  Manual/NTP, DaylightSavings, POSIX timezone, UTC date/time — by local
+  name, namespace-prefix agnostic) and offered to the new
+  `onvif_c_config_t.on_set_system_date_and_time` hook; return false to
+  answer a Sender fault instead of the ack. Without the hook the
+  historical ack stands (documented placeholder — the request is NOT
+  applied). `SetNTP` lands via `on_set_ntp` (FromDHCP + first NTPServer
+  token: DNS name / IPv4 / IPv6); without it the action keeps its
+  ActionNotSupported fault. New pure-C `core/onvif_time.{c,h}` parser
+  (host golden tests) and `onvif_xml_fault_sender`/`onvif_xml_set_ntp_ack`
+  builders.
+
 ### Added — Media2 minimal face (issue #18)
 
 - Decision recorded: **minimal subset in** (not Media1-only, not full) —

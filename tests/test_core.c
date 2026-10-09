@@ -9,6 +9,7 @@
 #include "../core/onvif_xml.h"
 #include "../core/onvif_probe.h"
 #include "../core/onvif_events_ring.h"
+#include "../core/onvif_time.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -647,6 +648,92 @@ static void test_wsse(void)
           "malformed created treated stale");
 }
 
+static void test_time_parse(void)
+{
+    /* SetSystemDateAndTime, manual mode with full payload (namespace
+     * prefixes vary by client — parsing is by local name). */
+    const char *manual_body =
+        "<s:Envelope xmlns:s=\"http://www.w3.org/2003/05/soap-envelope\"><s:Body>"
+        "<tds:SetSystemDateAndTime>"
+        "<tds:DateTimeType>Manual</tds:DateTimeType>"
+        "<tds:DaylightSavings>true</tds:DaylightSavings>"
+        "<tds:TimeZone><tt:TZ>CST-8</tt:TZ></tds:TimeZone>"
+        "<tds:UTCDateTime><tt:Time>"
+        "<tt:Hour>9</tt:Hour><tt:Minute>30</tt:Minute><tt:Second>5</tt:Second>"
+        "</tt:Time><tt:Date>"
+        "<tt:Year>2026</tt:Year><tt:Month>10</tt:Month><tt:Day>9</tt:Day>"
+        "</tt:Date></tds:UTCDateTime>"
+        "</tds:SetSystemDateAndTime></s:Body></s:Envelope>";
+    onvif_time_set_req_t req;
+    CHECK(onvif_time_parse_set_system_date_and_time(manual_body, &req), "manual body parses");
+    CHECK(req.have_type && req.manual, "DateTimeType=Manual");
+    CHECK(req.daylight_savings, "DaylightSavings=true");
+    CHECK(strcmp(req.tz, "CST-8") == 0, "TZ posix string");
+    CHECK(req.have_utc, "UTCDateTime present");
+    CHECK(req.utc.year == 2026 && req.utc.month == 10 && req.utc.day == 9, "date fields");
+    CHECK(req.utc.hour == 9 && req.utc.minute == 30 && req.utc.second == 5, "time fields");
+
+    /* NTP mode: no UTCDateTime; DaylightSavings default false. */
+    const char *ntp_body =
+        "<tds:SetSystemDateAndTime>"
+        "<tds:DateTimeType>NTP</tds:DateTimeType>"
+        "<tds:DaylightSavings>false</tds:DaylightSavings>"
+        "</tds:SetSystemDateAndTime>";
+    CHECK(onvif_time_parse_set_system_date_and_time(ntp_body, &req), "ntp body parses");
+    CHECK(req.have_type && !req.manual, "DateTimeType=NTP");
+    CHECK(!req.daylight_savings, "DaylightSavings=false");
+    CHECK(!req.have_utc && req.utc.year == 0, "no UTCDateTime -> zeroed utc");
+    CHECK(req.tz[0] == '\0', "no TimeZone -> empty string");
+
+    /* Unprefixed elements parse the same. */
+    const char *bare =
+        "<SetSystemDateAndTime><DateTimeType>Manual</DateTimeType>"
+        "<UTCDateTime><Time><Hour>23</Hour><Minute>59</Minute><Second>0</Second></Time>"
+        "<Date><Year>2000</Year><Month>1</Month><Day>2</Day></Date></UTCDateTime>"
+        "</SetSystemDateAndTime>";
+    CHECK(onvif_time_parse_set_system_date_and_time(bare, &req), "bare body parses");
+    CHECK(req.utc.year == 2000 && req.utc.hour == 23, "bare fields");
+
+    /* Wrong action / no expected elements -> false. */
+    CHECK(!onvif_time_parse_set_system_date_and_time("<tds:GetSystemDateAndTime/>", &req),
+          "wrong action rejected");
+    CHECK(!onvif_time_parse_set_system_date_and_time("", &req), "empty body rejected");
+
+    /* SetNTP with a DNS name. */
+    const char *ntp_dns =
+        "<tds:SetNTP><tds:FromDHCP>false</tds:FromDHCP>"
+        "<tds:NTPServer><tt:DNSname>ntp.example.com</tt:DNSname></tds:NTPServer>"
+        "<tds:NTPServer><tt:DNSname>ntp2.example.com</tt:DNSname></tds:NTPServer>"
+        "</tds:SetNTP>";
+    onvif_time_ntp_req_t nreq;
+    CHECK(onvif_time_parse_set_ntp(ntp_dns, &nreq), "setntp parses");
+    CHECK(nreq.have_from_dhcp && !nreq.from_dhcp, "FromDHCP=false");
+    CHECK(nreq.have_server && strcmp(nreq.server, "ntp.example.com") == 0, "first DNS server");
+
+    /* SetNTP with an IPv4 literal + FromDHCP=true, no server list. */
+    const char *ntp_ip =
+        "<tds:SetNTP><tds:FromDHCP>false</tds:FromDHCP>"
+        "<tds:NTPServer><tt:IPv4Address>192.168.1.1</tt:IPv4Address></tds:NTPServer>"
+        "</tds:SetNTP>";
+    CHECK(onvif_time_parse_set_ntp(ntp_ip, &nreq), "setntp ip parses");
+    CHECK(strcmp(nreq.server, "192.168.1.1") == 0, "IPv4 literal");
+
+    const char *ntp_dhcp =
+        "<tds:SetNTP><tds:FromDHCP>true</tds:FromDHCP></tds:SetNTP>";
+    CHECK(onvif_time_parse_set_ntp(ntp_dhcp, &nreq), "setntp dhcp parses");
+    CHECK(nreq.have_from_dhcp && nreq.from_dhcp, "FromDHCP=true");
+    CHECK(!nreq.have_server && nreq.server[0] == '\0', "no server -> empty");
+
+    /* IPv6 literal form. */
+    const char *ntp_v6 =
+        "<tds:SetNTP><tds:NTPServer><tt:IPv6Address>fe80::1</tt:IPv6Address></tds:NTPServer></tds:SetNTP>";
+    CHECK(onvif_time_parse_set_ntp(ntp_v6, &nreq), "setntp v6 parses");
+    CHECK(strcmp(nreq.server, "fe80::1") == 0, "IPv6 literal");
+
+    CHECK(!onvif_time_parse_set_ntp("<tds:GetNTP/>", &nreq), "wrong action rejected");
+    CHECK(!onvif_time_parse_set_ntp("", &nreq), "empty ntp body rejected");
+}
+
 int main(void)
 {
     test_device_service_xml();
@@ -716,5 +803,6 @@ int main(void)
     CHECK_STR(g, G_NEW_M2SYNC, "m2sync golden");
 
     printf("%d checks, %d failures\n", checks, failures);
+    test_time_parse();
     return failures == 0 ? 0 : 1;
 }

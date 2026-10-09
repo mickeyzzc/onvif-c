@@ -27,6 +27,37 @@ static void cb_keyframe(void)
 {
     g_keyframe_calls++;
 }
+
+/* ---- time hooks (issue #22) ---- */
+static int  g_time_calls;
+static bool g_time_accept = true;
+static bool g_time_manual, g_time_ds, g_time_have_utc;
+static char g_time_tz[64];
+static onvif_c_utc_time_t g_time_utc;
+static bool cb_set_time(bool manual, bool daylight_savings, const char *tz,
+                        const onvif_c_utc_time_t *utc)
+{
+    g_time_calls++;
+    g_time_manual   = manual;
+    g_time_ds       = daylight_savings;
+    snprintf(g_time_tz, sizeof(g_time_tz), "%s", tz ? tz : "");
+    g_time_have_utc = utc != NULL;
+    g_time_utc      = utc ? *utc : (onvif_c_utc_time_t){0};
+    return g_time_accept;
+}
+
+static int  g_ntp_calls;
+static bool g_ntp_accept = true;
+static bool g_ntp_from_dhcp, g_ntp_have_server;
+static char g_ntp_server[256];
+static bool cb_set_ntp(bool from_dhcp, const char *server)
+{
+    g_ntp_calls++;
+    g_ntp_from_dhcp   = from_dhcp;
+    g_ntp_have_server = server != NULL;
+    snprintf(g_ntp_server, sizeof(g_ntp_server), "%s", server ? server : "");
+    return g_ntp_accept;
+}
 static int g_gate    = 1;
 static int g_fps     = 12;
 static int g_ip_mode = 0;  /* 0 good, 1 zero-always */
@@ -110,6 +141,10 @@ static void reset_env(void)
     g_fps          = 12;
     g_ip_mode      = 0;
     g_ip_zero_once = 0;
+    g_time_calls   = 0;
+    g_time_accept  = true;
+    g_ntp_calls    = 0;
+    g_ntp_accept   = true;
 }
 
 static void stop_env(void)
@@ -128,6 +163,17 @@ static esp_err_t post(httpd_uri_t *u, const char *action, httpd_req_t *r)
              "<s:Body>%s</s:Body></s:Envelope>",
              action);
     return onvif_fake_httpd_invoke(u, g_body, strlen(g_body), r);
+}
+/* POST one wrapped SOAP action whose body exceeds the shared g_body. */
+static esp_err_t post_big(httpd_uri_t *u, const char *action, httpd_req_t *r)
+{
+    static char big[1024];
+    snprintf(big, sizeof(big),
+             "<s:Envelope xmlns:s=\"http://www.w3.org/2003/05/soap-envelope\""
+             " xmlns:tt=\"http://www.onvif.org/ver10/schema\">"
+             "<s:Body>%s</s:Body></s:Envelope>",
+             action);
+    return onvif_fake_httpd_invoke(u, big, strlen(big), r);
 }
 
 void test_service(void)
@@ -484,6 +530,101 @@ void test_service(void)
     CHECK(u != NULL, "media registered");
     CHECK(post(u, "<trt:GetProfiles/>", &r) == ESP_OK, "media no-token handled");
     CHECK_SUB(r.status, "401", "media no-token 401");
+
+    /* ---- time management hooks (issue #22) ---- */
+    stop_env();
+    reset_env();
+    cfg                             = base_cfg();
+    cfg.on_set_system_date_and_time = cb_set_time;
+    cfg.on_set_ntp                  = cb_set_ntp;
+    CHECK(onvif_c_start(hd, &cfg) == ESP_OK, "start OK with time hooks");
+    u = onvif_fake_httpd_find("/onvif/device_service");
+    CHECK(u != NULL, "device handler found (time hooks)");
+
+    /* Placeholder ack is now callback-driven: accepted set applies. */
+    CHECK(post_big(u,
+                   "<tds:SetSystemDateAndTime>"
+                   "<tds:DateTimeType>Manual</tds:DateTimeType>"
+                   "<tds:DaylightSavings>true</tds:DaylightSavings>"
+                   "<tds:TimeZone><tt:TZ>CST-8</tt:TZ></tds:TimeZone>"
+                   "<tds:UTCDateTime><tt:Time>"
+                   "<tt:Hour>9</tt:Hour><tt:Minute>30</tt:Minute><tt:Second>5</tt:Second>"
+                   "</tt:Time><tt:Date>"
+                   "<tt:Year>2026</tt:Year><tt:Month>10</tt:Month><tt:Day>9</tt:Day>"
+                   "</tds:Date></tds:UTCDateTime>"
+                   "</tds:SetSystemDateAndTime>",
+                   &r) == ESP_OK,
+          "set date handled");
+    CHECK_SUB(r.resp, "SetSystemDateAndTimeResponse", "set date ack");
+    CHECK(g_time_calls == 1, "on_set_system_date_and_time fired");
+    CHECK(g_time_manual && g_time_ds && g_time_have_utc, "set-time args (manual)");
+    CHECK(strcmp(g_time_tz, "CST-8") == 0, "set-time tz arg");
+    CHECK(g_time_utc.year == 2026 && g_time_utc.minute == 30, "set-time utc args");
+
+    /* NTP mode: utc pointer NULL, tz NULL. */
+    CHECK(post_big(u,
+                   "<tds:SetSystemDateAndTime>"
+                   "<tds:DateTimeType>NTP</tds:DateTimeType>"
+                   "<tds:DaylightSavings>false</tds:DaylightSavings>"
+                   "</tds:SetSystemDateAndTime>",
+                   &r) == ESP_OK,
+          "set date ntp handled");
+    CHECK_SUB(r.resp, "SetSystemDateAndTimeResponse", "set date ntp ack");
+    CHECK(g_time_calls == 2 && !g_time_manual && !g_time_have_utc && g_time_tz[0] == '\0',
+          "set-time args (ntp)");
+
+    /* Host rejection -> Sender fault, not the silent ack. */
+    g_time_accept = false;
+    CHECK(post_big(u,
+                   "<tds:SetSystemDateAndTime>"
+                   "<tds:DateTimeType>Manual</tds:DateTimeType>"
+                   "</tds:SetSystemDateAndTime>",
+                   &r) == ESP_OK,
+          "set date reject handled");
+    CHECK_SUB(r.resp, "soap:Sender", "rejected set date -> Sender fault");
+    CHECK(g_time_calls == 3, "reject path still reaches the host");
+    g_time_accept = true;
+
+    /* Malformed body with a hook installed -> Sender fault. */
+    CHECK(post_big(u, "<tds:SetSystemDateAndTime/>", &r) == ESP_OK, "malformed set date handled");
+    CHECK_SUB(r.resp, "soap:Sender", "malformed set date -> Sender fault");
+    CHECK(g_time_calls == 3, "malformed body does not reach the host");
+
+    /* SetNTP: accepted -> ack with parsed server. */
+    CHECK(post_big(u,
+                   "<tds:SetNTP><tds:FromDHCP>false</tds:FromDHCP>"
+                   "<tds:NTPServer><tt:DNSname>ntp.lan.example</tt:DNSname></tds:NTPServer>"
+                   "</tds:SetNTP>",
+                   &r) == ESP_OK,
+          "set ntp handled");
+    CHECK_SUB(r.resp, "SetNTPResponse", "set ntp ack");
+    CHECK(g_ntp_calls == 1 && !g_ntp_from_dhcp && g_ntp_have_server, "set-ntp args");
+    CHECK(strcmp(g_ntp_server, "ntp.lan.example") == 0, "set-ntp server arg");
+
+    /* SetNTP rejection -> Sender fault. */
+    g_ntp_accept = false;
+    CHECK(post_big(u, "<tds:SetNTP><tds:FromDHCP>true</tds:FromDHCP></tds:SetNTP>", &r) == ESP_OK,
+          "set ntp reject handled");
+    CHECK_SUB(r.resp, "soap:Sender", "rejected set ntp -> Sender fault");
+    CHECK(g_ntp_calls == 2 && g_ntp_from_dhcp && !g_ntp_have_server, "reject set-ntp args");
+    g_ntp_accept = true;
+
+    onvif_c_stop();
+    onvif_fake_task_drain();
+
+    /* Without the hooks the historical behavior is unchanged:
+     * SetSystemDateAndTime acks (documented placeholder), SetNTP stays
+     * ActionNotSupported. */
+    reset_env();
+    cfg = base_cfg();
+    CHECK(onvif_c_start(hd, &cfg) == ESP_OK, "start OK without time hooks");
+    u = onvif_fake_httpd_find("/onvif/device_service");
+    CHECK(post_big(u, "<tds:SetSystemDateAndTime/>", &r) == ESP_OK, "set date placeholder handled");
+    CHECK_SUB(r.resp, "SetSystemDateAndTimeResponse", "placeholder ack without hook");
+    CHECK(g_time_calls == 0, "no hook -> callback not called");
+    CHECK(post_big(u, "<tds:SetNTP><tds:FromDHCP>false</tds:FromDHCP></tds:SetNTP>", &r) == ESP_OK,
+          "set ntp unsupported handled");
+    CHECK_SUB(r.resp, "ter:ActionNotSupported", "set ntp stays ActionNotSupported");
 
     onvif_c_stop();
     onvif_fake_task_drain();

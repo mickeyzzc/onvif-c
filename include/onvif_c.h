@@ -24,6 +24,9 @@
 #define ONVIF_C_H
 
 #include <stdbool.h>
+
+/* Time-hook datetime type (issue #22), shared with core. */
+#include "../core/onvif_time.h"
 #include <stdint.h>
 #include "esp_err.h"
 #include "esp_http_server.h"
@@ -61,6 +64,23 @@ typedef struct {
      * emit a keyframe at the next opportunity. NULL = acknowledge only
      * (issue #14).                                                          */
     void (*on_keyframe)(void);
+
+    /* ---- time management (issue #22) ---- */
+    /** SetSystemDateAndTime hook: the parsed request is offered to the
+     * firmware, which applies it to the hardware clock (return true ->
+     * ack) or rejects it (return false -> Sender fault). `manual` folds
+     * DateTimeType Manual/NTP; `tz_posix` and `utc` are NULL when the
+     * request omitted them (NTP mode carries neither a timezone nor a
+     * manual timestamp). NULL = acknowledge only — the documented
+     * placeholder (the request is NOT applied).                          */
+    bool (*on_set_system_date_and_time)(bool manual, bool daylight_savings, const char *tz_posix,
+                                        const onvif_c_utc_time_t *utc);
+    /** SetNTP hook: the firmware stores the NTP source and starts SNTP
+     * (return true -> ack; false -> Sender fault). `server` is the
+     * request's first NTPServer token (DNS name or IP literal), NULL
+     * when the request listed none (FromDHCP=true). NULL = the action
+     * stays ActionNotSupported — the historical behavior.                */
+    bool (*on_set_ntp)(bool from_dhcp, const char *server);
 
     /* ---- authentication (WS-Security UsernameToken, issue #17) ----
      * auth_password == NULL = feature absent: every request is served

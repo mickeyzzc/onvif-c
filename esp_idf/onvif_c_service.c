@@ -9,6 +9,7 @@
 #include "onvif_c_events.h"
 #include "../core/onvif_xml.h"
 #include "../core/onvif_wsse.h"
+#include "../core/onvif_time.h"
 #include "esp_http_server.h"
 #include "esp_log.h"
 #include "esp_err.h"
@@ -191,6 +192,21 @@ static esp_err_t handle_get_snapshot(httpd_req_t *req)
 /*  SOAP action dispatch                                               */
 /* ------------------------------------------------------------------ */
 
+/* Sender fault with a library-fixed English reason (ASCII, no escaping
+ * needed). Used when a time hook rejects a request (issue #22). */
+static esp_err_t send_sender_fault(httpd_req_t *req, const char *text)
+{
+    char *resp = malloc(ONVIF_C_RESP_MAX);
+    if (!resp) {
+        return ESP_FAIL;
+    }
+    int len = onvif_xml_fault_sender(resp, ONVIF_C_RESP_MAX, text);
+    httpd_resp_set_type(req, "application/soap+xml");
+    httpd_resp_send(req, resp, len > 0 ? len : 0);
+    free(resp);
+    return ESP_OK;
+}
+
 static void log_unsupported(const char *body)
 {
     const char *act_start = strstr(body, ":Body>");
@@ -251,7 +267,29 @@ static esp_err_t dispatch_device_action(httpd_req_t *req, const char *body)
         SEND_BUILT(req, onvif_xml_system_reboot(resp_, ONVIF_C_RESP_MAX));
     }
     if (strstr(body, "SetSystemDateAndTime")) {
+        if (s_cfg.on_set_system_date_and_time) {
+            onvif_time_set_req_t parsed;
+            if (!onvif_time_parse_set_system_date_and_time(body, &parsed))
+                return send_sender_fault(req, "Malformed SetSystemDateAndTime");
+            if (!s_cfg.on_set_system_date_and_time(parsed.manual, parsed.daylight_savings,
+                                                   parsed.tz[0] ? parsed.tz : NULL,
+                                                   parsed.have_utc ? &parsed.utc : NULL))
+                return send_sender_fault(req, "SetSystemDateAndTime rejected by device");
+        }
         SEND_BUILT(req, onvif_xml_set_system_date_and_time_ack(resp_, ONVIF_C_RESP_MAX));
+    }
+    if (strstr(body, "SetNTP")) {
+        if (s_cfg.on_set_ntp) {
+            onvif_time_ntp_req_t parsed;
+            if (!onvif_time_parse_set_ntp(body, &parsed))
+                return send_sender_fault(req, "Malformed SetNTP");
+            if (!s_cfg.on_set_ntp(parsed.from_dhcp,
+                                  parsed.have_server ? parsed.server : NULL))
+                return send_sender_fault(req, "SetNTP rejected by device");
+            SEND_BUILT(req, onvif_xml_set_ntp_ack(resp_, ONVIF_C_RESP_MAX));
+        }
+        log_unsupported(body);
+        return send_fault(req);
     }
     if (strstr(body, "GetServiceCapabilities")) {
         SEND_BUILT(req, onvif_xml_device_service_capabilities(resp_, ONVIF_C_RESP_MAX));

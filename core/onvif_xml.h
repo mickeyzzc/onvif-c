@@ -40,6 +40,8 @@ int onvif_xml_get_scopes(char *buf, size_t n, const char *scopes);
 int onvif_xml_system_reboot(char *buf, size_t n);
 /** SetSystemDateAndTime — accept + acknowledge. */
 int onvif_xml_set_system_date_and_time_ack(char *buf, size_t n);
+int onvif_xml_set_ntp_ack(char *buf, size_t n);
+int onvif_xml_fault_sender(char *buf, size_t n, const char *text);
 /** Device GetServiceCapabilities — nothing optional supported. */
 int onvif_xml_device_service_capabilities(char *buf, size_t n);
 

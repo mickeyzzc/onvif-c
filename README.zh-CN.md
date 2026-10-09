@@ -15,7 +15,11 @@ Pull-Point 事件把相机交给 NVR，零第三方依赖，代码占用 ~10 KB�
 
 - **SOAP 设备/媒体服务** —— NVR 发现并添加相机所需的精确动作集：
   `GetSystemDateAndTime`、`GetDeviceInformation`、`GetCapabilities`、
-  `GetProfiles`、`GetStreamUri`、`GetSnapshotUri`。
+  `GetServices`、`GetScopes`、`SetSystemDateAndTime`（解析后交给
+  `on_set_system_date_and_time` 钩子——未装钩子时仅应答占位）、`SetNTP`
+  （经 `on_set_ntp` 钩子——未装钩子时保持 ActionNotSupported）、`SystemReboot`、
+  设备 `GetServiceCapabilities`、`GetProfiles`、`GetStreamUri`、
+  `GetSnapshotUri` 及视频编码配置族。
 - **Pull-Point 事件服务** —— `tns1:VideoSource/MotionAlarm` 主题
   （`Source=CSI`、`State`、`Score 0-100`）；单订阅（新顶旧）、授予 1h
   TerminationTime、120s 空闲过期、**无长轮询**（PullMessages 立即返回，
@@ -99,6 +103,8 @@ Pull-Point 订阅周期，全过退出 0。
 | `frame_rate` | 否 | 15 | GetProfiles `FrameRateLimit`。 |
 | `snapshot_uri` | 否 | 派生 `http://<ip>:<http_port>/api/capture` | GetSnapshotUri 应答。 |
 | `events_enabled` | 否 | NULL = 无此能力 | 运行时门；NULL 时事件服务不注册也不广播。 |
+| `on_set_system_date_and_time` | 否 | NULL = 仅应答 | issue #22：解析后的请求（DateTimeType Manual/NTP、夏令时、POSIX 时区、UTC 日期时间——缺省为 NULL）交给固件；返回 true → 应答，false → Sender fault。 |
+| `on_set_ntp` | 否 | NULL = ActionNotSupported | issue #22：`from_dhcp` 加首个 NTPServer 令牌（DNS 名或 IP 字面量；无则 NULL）；返回 true → 应答，false → Sender fault。 |
 | `http_port` | 否 | 80 | 流入**所有**广告 URI。 |
 | `wdt_watch_discovery` | 否 | false | 把 WS-Discovery 任务挂上 ESP-IDF 任务看门狗（`CONFIG_ESP_TASK_WDT`）；任务卡死即停喂、TWDT 触发。 |
 | `mdns_hostname`、`mdns_instance` | 否 | NULL = 跳过 mDNS | instance 默认取 `model`。 |
