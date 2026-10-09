@@ -31,6 +31,7 @@ extern int g_checks, g_failures;
 #define CHECK_SUB(hay, needle, name) CHECK((hay) != NULL && strstr((hay), (needle)) != NULL, name)
 
 void test_service(void);
+void test_time_config_service(void);
 void test_events(void);
 void test_discovery(void);
 

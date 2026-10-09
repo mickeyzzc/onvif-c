@@ -15,7 +15,7 @@ OUT=build-cov
 rm -rf "$OUT" *.gcov
 mkdir -p "$OUT"
 
-CORE_SRCS="../core/onvif_xml.c ../core/onvif_wsse.c ../core/onvif_probe.c ../core/onvif_events_ring.c"
+CORE_SRCS="../core/onvif_xml.c ../core/onvif_time.c ../core/onvif_wsse.c ../core/onvif_probe.c ../core/onvif_events_ring.c"
 PORT_SRCS="../esp_idf/onvif_c_service.c ../esp_idf/onvif_c_events.c ../esp_idf/onvif_c_discovery.c"
 CFLAGS="-std=c99 -Wall -Wextra -Werror -D_DEFAULT_SOURCE -g -O0 --coverage -Ihost_stubs"
 
@@ -30,18 +30,18 @@ done
 $CC --coverage -pthread -Wl,--wrap=time -o "$OUT/run_port" \
     "$OUT/test_port_main.o" "$OUT/test_service.o" "$OUT/test_events.o" \
     "$OUT/test_discovery.o" "$OUT/onvif_fake.o" \
-    "$OUT/onvif_xml.o" "$OUT/onvif_wsse.o" "$OUT/onvif_probe.o" "$OUT/onvif_events_ring.o" \
+    "$OUT/onvif_xml.o" "$OUT/onvif_time.o" "$OUT/onvif_wsse.o" "$OUT/onvif_probe.o" "$OUT/onvif_events_ring.o" \
     "$OUT/onvif_c_service.o" "$OUT/onvif_c_events.o" "$OUT/onvif_c_discovery.o"
 $CC --coverage -o "$OUT/run_core" \
     "$OUT/test_core.o" \
-    "$OUT/onvif_xml.o" "$OUT/onvif_wsse.o" "$OUT/onvif_probe.o" "$OUT/onvif_events_ring.o"
+    "$OUT/onvif_xml.o" "$OUT/onvif_time.o" "$OUT/onvif_wsse.o" "$OUT/onvif_probe.o" "$OUT/onvif_events_ring.o"
 
 "$OUT/run_core"
 "$OUT/run_port"
 
 echo ""
 echo "line coverage (gate: ${MIN}%)"
-for o in onvif_xml onvif_probe onvif_events_ring \
+for o in onvif_xml onvif_time onvif_probe onvif_events_ring \
          onvif_wsse onvif_c_service onvif_c_events onvif_c_discovery; do
     gcov -b "$OUT/$o.o" >/dev/null
 done
@@ -49,7 +49,7 @@ done
 status=0
 total_hit=0
 total_lines=0
-for f in ../core/onvif_xml.c ../core/onvif_wsse.c ../core/onvif_probe.c ../core/onvif_events_ring.c \
+for f in ../core/onvif_xml.c ../core/onvif_time.c ../core/onvif_wsse.c ../core/onvif_probe.c ../core/onvif_events_ring.c \
          ../esp_idf/onvif_c_service.c ../esp_idf/onvif_c_events.c \
          ../esp_idf/onvif_c_discovery.c; do
     g=$(basename "$f").gcov

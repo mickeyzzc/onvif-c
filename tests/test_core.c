@@ -7,6 +7,7 @@
  */
 
 #include "../core/onvif_xml.h"
+#include "../core/onvif_time.h"
 #include "../core/onvif_probe.h"
 #include "../core/onvif_events_ring.h"
 
@@ -48,7 +49,7 @@ static const char *G_SYSTEM_DATE = "<?xml version=\"1.0\" encoding=\"utf-8\"?>"
                                    "<soap:Body>"
                                    "<tds:GetSystemDateAndTimeResponse>"
                                    "<tds:SystemDateAndTime>"
-                                   "<tt:DateTimeType>NTP</tt:DateTimeType>"
+                                   "<tt:DateTimeType>MANUAL</tt:DateTimeType>"
                                    "<tt:DaylightSavings>false</tt:DaylightSavings>"
                                    "<tt:TimeZone>"
                                    "<tt:TZ>UTC</tt:TZ>"
@@ -196,8 +197,8 @@ static void test_device_service_xml(void)
 {
     struct tm utc = {
         .tm_hour = 7, .tm_min = 42, .tm_sec = 13, .tm_year = 126, .tm_mon = 8, .tm_mday = 20};
-    onvif_xml_system_date_and_time(g, sizeof(g), &utc);
-    CHECK_STR(g, G_SYSTEM_DATE, "GetSystemDateAndTime golden");
+    onvif_xml_system_date_and_time(g, sizeof(g), &utc, false, NULL);
+    CHECK_STR(g, G_SYSTEM_DATE, "GetSystemDateAndTime golden (MANUAL, UTC)");
 
     onvif_xml_device_information(g, sizeof(g), "MiBee", "MiBeeCam", "v0.1.0", "aabbccddeeff",
                                  "ESP32-S3");
@@ -233,6 +234,83 @@ static void test_device_service_xml(void)
 
     onvif_xml_fault_action_not_supported(g, sizeof(g));
     CHECK_STR(g, G_FAULT, "Sender/ActionNotSupported fault golden");
+}
+
+static void test_time_config(void)
+{
+    onvif_c_time_req_t tr;
+    char               srv[8][ONVIF_TIME_HOST_MAX];
+
+    /* -- SetSystemDateAndTime: full manual request, tt: prefixes -- */
+    static const char *FULL =
+        "<tds:SetSystemDateAndTime><tds:SystemDateAndTime>"
+        "<tt:DateTimeType>MANUAL</tt:DateTimeType>"
+        "<tt:DSTEnabled>false</tt:DSTEnabled>"
+        "<tt:TimeZone><tt:TZ>CST-8</tt:TZ></tt:TimeZone>"
+        "<tt:UTCDateTime>"
+        "<tt:Time><tt:Hour>12</tt:Hour><tt:Minute>34</tt:Minute><tt:Second>56</tt:Second></tt:Time>"
+        "<tt:Date><tt:Year>2026</tt:Year><tt:Month>10</tt:Month><tt:Day>9</tt:Day></tt:Date>"
+        "</tt:UTCDateTime>"
+        "</tds:SystemDateAndTime></tds:SetSystemDateAndTime>";
+    CHECK(onvif_time_parse_set_request(FULL, &tr), "parse full manual request");
+    CHECK(!tr.ntp_mode, "manual mode detected");
+    CHECK(tr.has_utc, "utc present");
+    CHECK(tr.has_tz && strcmp(tr.tz, "CST-8") == 0, "tz parsed");
+    {
+        struct tm t = {
+            .tm_sec = 56, .tm_min = 34, .tm_hour = 12, .tm_mday = 9, .tm_mon = 9, .tm_year = 126};
+        CHECK(tr.utc_epoch == (int64_t)timegm(&t), "epoch matches libc timegm");
+    }
+
+    /* -- SetSystemDateAndTime: NTP mode switch, prefix-less tags -- */
+    static const char *NTPB =
+        "<SetSystemDateAndTime><SystemDateAndTime><DateTimeType>NTP</DateTimeType>"
+        "</SystemDateAndTime></SetSystemDateAndTime>";
+    CHECK(onvif_time_parse_set_request(NTPB, &tr), "parse ntp-mode request");
+    CHECK(tr.ntp_mode && !tr.has_utc && !tr.has_tz, "ntp mode fields");
+
+    /* -- SetSystemDateAndTime: garbage UTCDateTime -> reject -- */
+    static const char *BAD =
+        "<tds:SetSystemDateAndTime><tt:UTCDateTime>"
+        "<tt:Time><tt:Hour>12</tt:Hour></tt:Time>"
+        "<tt:Date><tt:Year>2026</tt:Year><tt:Month>13</tt:Month><tt:Day>9</tt:Day></tt:Date>"
+        "</tt:UTCDateTime></tds:SetSystemDateAndTime>";
+    CHECK(!onvif_time_parse_set_request(BAD, &tr), "malformed utc rejected");
+
+    /* -- SetNTP: two IPv4 servers in order -- */
+    static const char *NTPSET =
+        "<tds:SetNTP><tt:NTPFromDHCP>false</tt:NTPFromDHCP>"
+        "<tt:NTPManual>"
+        "<tt:NetworkHost><tt:Type>IPv4</tt:Type><tt:IPv4Address>192.168.1.10</tt:IPv4Address></"
+        "tt:NetworkHost>"
+        "<tt:NetworkHost><tt:Type>IPv4</tt:Type><tt:IPv4Address>192.168.1.11</tt:IPv4Address></"
+        "tt:NetworkHost>"
+        "</tt:NTPManual></tds:SetNTP>";
+    CHECK(onvif_time_is_set_ntp(NTPSET), "is_set_ntp true");
+    CHECK(onvif_time_parse_set_ntp(NTPSET, srv, 8) == 2, "two servers parsed");
+    CHECK(strcmp(srv[0], "192.168.1.10") == 0 && strcmp(srv[1], "192.168.1.11") == 0,
+          "server order preserved");
+    CHECK(onvif_time_parse_set_ntp("<tds:SetNTP><tt:NTPFromDHCP>true</tt:NTPFromDHCP></tds:SetNTP>",
+                                   srv, 8) == 0,
+          "dhcp-only parses to zero servers");
+
+    /* -- builders -- */
+    struct tm utc = {
+        .tm_hour = 1, .tm_min = 2, .tm_sec = 3, .tm_year = 126, .tm_mon = 9, .tm_mday = 9};
+    int n = onvif_xml_system_date_and_time(g, sizeof(g), &utc, true, "CST-8");
+    CHECK(n > 0, "date builder ok");
+    CHECK(strstr(g, "<tt:DateTimeType>NTP</tt:DateTimeType>") != NULL, "ntp reported when active");
+    CHECK(strstr(g, "<tt:TZ>CST-8</tt:TZ>") != NULL, "tz from seam");
+    n = onvif_xml_system_date_and_time(g, sizeof(g), &utc, false, NULL);
+    CHECK(strstr(g, "<tt:DateTimeType>MANUAL</tt:DateTimeType>") != NULL, "manual when inactive");
+    CHECK(strstr(g, "<tt:TZ>UTC</tt:TZ>") != NULL, "default tz");
+
+    n = onvif_xml_set_ntp_response(g, sizeof(g));
+    CHECK(n > 0 && strstr(g, "<tds:SetNTPResponse/>") != NULL, "SetNTPResponse builder");
+
+    n = onvif_xml_fault_invalid(g, sizeof(g), "ter:InvalidArgVal", "boom");
+    CHECK(n > 0 && strstr(g, "ter:InvalidArgVal") != NULL && strstr(g, "boom") != NULL,
+          "invalid fault builder");
 }
 
 static void test_events_xml(void)
@@ -650,6 +728,7 @@ static void test_wsse(void)
 int main(void)
 {
     test_device_service_xml();
+    test_time_config();
     test_events_xml();
     test_probe();
     test_ring();

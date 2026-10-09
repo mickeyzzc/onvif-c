@@ -13,6 +13,7 @@
 #include "../esp_idf/onvif_c_port.h"
 #include "test_util.h"
 #include "../core/onvif_wsse.h"
+#include "../core/onvif_time.h"
 #include "onvif_fake.h"
 #include <stdlib.h>
 
@@ -27,6 +28,40 @@ static void cb_keyframe(void)
 {
     g_keyframe_calls++;
 }
+/* time-configuration seam state */
+static int                g_time_apply_calls;
+static onvif_c_time_req_t g_time_req;
+static esp_err_t          g_time_apply_err = ESP_OK;
+static int                g_ntp_calls;
+static size_t             g_ntp_n;
+static char               g_ntp_last[ONVIF_TIME_HOST_MAX];
+static esp_err_t          g_ntp_err = ESP_OK;
+static int                g_ntp_active; /* 0 -> MANUAL (cb present) */
+static const char        *g_tz_cb;      /* NULL -> cb absent */
+
+static bool cb_time_ntp_active(void)
+{
+    return g_ntp_active == 1;
+}
+static const char *cb_time_tz(void)
+{
+    return g_tz_cb;
+}
+static esp_err_t cb_time_apply(const onvif_c_time_req_t *r)
+{
+    g_time_req = *r;
+    g_time_apply_calls++;
+    return g_time_apply_err;
+}
+static esp_err_t cb_ntp_set(const char *const *servers, size_t n)
+{
+    g_ntp_calls++;
+    g_ntp_n = n;
+    if (n > 0)
+        snprintf(g_ntp_last, sizeof(g_ntp_last), "%s", servers[0]);
+    return g_ntp_err;
+}
+
 static int g_gate    = 1;
 static int g_fps     = 12;
 static int g_ip_mode = 0;  /* 0 good, 1 zero-always */
@@ -97,6 +132,10 @@ static onvif_c_config_t base_cfg(void)
     c.stream_uri       = cb_stream_uri;
     c.frame_rate       = cb_frame_rate;
     c.on_keyframe      = cb_keyframe;
+    c.time_ntp_active  = cb_time_ntp_active;
+    c.time_tz          = cb_time_tz;
+    c.time_apply       = cb_time_apply;
+    c.ntp_set          = cb_ntp_set;
     c.http_port        = 80;
     return c;
 }
@@ -110,6 +149,16 @@ static void reset_env(void)
     g_fps          = 12;
     g_ip_mode      = 0;
     g_ip_zero_once = 0;
+
+    g_time_apply_calls = 0;
+    g_time_apply_err   = ESP_OK;
+    memset(&g_time_req, 0, sizeof(g_time_req));
+    g_ntp_calls   = 0;
+    g_ntp_n       = 0;
+    g_ntp_err     = ESP_OK;
+    g_ntp_last[0] = '\0';
+    g_ntp_active  = 0;
+    g_tz_cb       = NULL;
 }
 
 static void stop_env(void)
@@ -487,4 +536,104 @@ void test_service(void)
 
     onvif_c_stop();
     onvif_fake_task_drain();
+}
+
+void test_time_config_service(void)
+{
+    onvif_c_config_t cfg;
+    httpd_uri_t     *u;
+    httpd_req_t      r;
+    httpd_handle_t   hd = onvif_fake_httpd_handle();
+
+    static const char *SET_FULL =
+        "<tds:SetSystemDateAndTime><tds:SystemDateAndTime>"
+        "<tt:DateTimeType>MANUAL</tt:DateTimeType>"
+        "<tt:TimeZone><tt:TZ>CST-8</tt:TZ></tt:TimeZone>"
+        "<tt:UTCDateTime>"
+        "<tt:Time><tt:Hour>12</tt:Hour><tt:Minute>34</tt:Minute><tt:Second>56</tt:Second></tt:Time>"
+        "<tt:Date><tt:Year>2026</tt:Year><tt:Month>10</tt:Month><tt:Day>9</tt:Day></tt:Date>"
+        "</tt:UTCDateTime></tds:SystemDateAndTime></tds:SetSystemDateAndTime>";
+    static const char *SET_NTP =
+        "<tds:SetNTP><tt:NTPFromDHCP>false</tt:NTPFromDHCP>"
+        "<tt:NTPManual>"
+        "<tt:NetworkHost><tt:Type>IPv4</tt:Type><tt:IPv4Address>192.168.1.10</tt:IPv4Address></"
+        "tt:NetworkHost>"
+        "<tt:NetworkHost><tt:Type>IPv4</tt:Type><tt:IPv4Address>192.168.1.11</tt:IPv4Address></"
+        "tt:NetworkHost>"
+        "</tt:NTPManual></tds:SetNTP>";
+
+    /* -- applied path: ack + seam received parsed values -- */
+    reset_env();
+    cfg          = base_cfg();
+    g_ntp_active = 1;
+    g_tz_cb      = "CST-8";
+    CHECK(onvif_c_start(hd, &cfg) == ESP_OK, "start OK");
+    u = onvif_fake_httpd_find("/onvif/device_service");
+    CHECK(u != NULL, "device handler found");
+
+    CHECK(post(u, SET_FULL, &r) == ESP_OK, "set time handled");
+    CHECK_SUB(r.resp, "<tds:SetSystemDateAndTimeResponse/>", "applied -> ack");
+    CHECK(g_time_apply_calls == 1, "seam called once");
+    CHECK(g_time_req.has_utc && !g_time_req.ntp_mode, "seam sees manual+utc");
+    {
+        struct tm t = {
+            .tm_sec = 56, .tm_min = 34, .tm_hour = 12, .tm_mday = 9, .tm_mon = 9, .tm_year = 126};
+        CHECK(g_time_req.utc_epoch == (int64_t)timegm(&t), "seam sees parsed epoch");
+    }
+    CHECK(g_time_req.has_tz && strcmp(g_time_req.tz, "CST-8") == 0, "seam sees tz");
+
+    CHECK(post(u, SET_NTP, &r) == ESP_OK, "set ntp handled");
+    CHECK_SUB(r.resp, "<tds:SetNTPResponse/>", "ntp applied -> ack");
+    CHECK(g_ntp_calls == 1 && g_ntp_n == 2, "ntp seam called with 2 servers");
+    CHECK(strcmp(g_ntp_last, "192.168.1.10") == 0, "first server in order");
+
+    /* -- honesty: Get reflects the seam -- */
+    CHECK(post(u, "<tds:GetSystemDateAndTime/>", &r) == ESP_OK, "get handled");
+    CHECK_SUB(r.resp, "<tt:DateTimeType>NTP</tt:DateTimeType>", "mode NTP when active");
+    CHECK_SUB(r.resp, "<tt:TZ>CST-8</tt:TZ>", "tz from seam");
+    g_ntp_active = 0;
+    CHECK(post(u, "<tds:GetSystemDateAndTime/>", &r) == ESP_OK, "get handled 2");
+    CHECK_SUB(r.resp, "<tt:DateTimeType>MANUAL</tt:DateTimeType>", "mode MANUAL when inactive");
+
+    /* -- seam error -> Sender fault, never a silent ack -- */
+    g_time_apply_err = ESP_ERR_INVALID_STATE;
+    CHECK(post(u, SET_FULL, &r) == ESP_OK, "failing apply handled");
+    CHECK_SUB(r.resp, "<soap:Fault>", "apply failure -> fault");
+    CHECK_SUB(r.resp, "ESP_ERR_INVALID_STATE", "fault carries err name");
+    g_ntp_err = ESP_ERR_INVALID_STATE;
+    CHECK(post(u, SET_NTP, &r) == ESP_OK, "failing ntp handled");
+    CHECK_SUB(r.resp, "<soap:Fault>", "ntp failure -> fault");
+    g_time_apply_err = ESP_OK;
+    g_ntp_err        = ESP_OK;
+
+    /* -- malformed request -> Sender fault -- */
+    CHECK(post(u,
+               "<tds:SetSystemDateAndTime><tt:UTCDateTime>"
+               "<tt:Date><tt:Year>2026</tt:Year><tt:Month>99</tt:Month>"
+               "<tt:Day>1</tt:Day></tt:Date></tt:UTCDateTime>"
+               "</tds:SetSystemDateAndTime>",
+               &r) == ESP_OK,
+          "malformed handled");
+    CHECK_SUB(r.resp, "ter:InvalidArgVal", "malformed -> InvalidArgVal");
+
+    stop_env();
+
+    /* -- feature absent: ActionNotSupported on both Set ops, MANUAL on Get -- */
+    reset_env();
+    cfg                 = base_cfg();
+    cfg.time_ntp_active = NULL;
+    cfg.time_tz         = NULL;
+    cfg.time_apply      = NULL;
+    cfg.ntp_set         = NULL;
+    CHECK(onvif_c_start(hd, &cfg) == ESP_OK, "start OK (no seam)");
+    u = onvif_fake_httpd_find("/onvif/device_service");
+    CHECK(post(u, SET_FULL, &r) == ESP_OK, "absent set time handled");
+    CHECK_SUB(r.resp, "ter:ActionNotSupported", "absent seam -> ActionNotSupported");
+    CHECK(post(u, SET_NTP, &r) == ESP_OK, "absent set ntp handled");
+    CHECK_SUB(r.resp, "ter:ActionNotSupported", "absent ntp seam -> ActionNotSupported");
+    CHECK(g_time_apply_calls == 0 && g_ntp_calls == 0, "no calls when absent");
+    CHECK(post(u, "<tds:GetSystemDateAndTime/>", &r) == ESP_OK, "get handled (absent)");
+    CHECK_SUB(r.resp, "<tt:DateTimeType>MANUAL</tt:DateTimeType>", "no seam -> never claims NTP");
+
+    stop_env();
 }

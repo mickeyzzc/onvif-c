@@ -14,7 +14,7 @@ cd "$(dirname "$0")"
 CC="${CC:-cc}"
 CFLAGS="-std=c99 -Wall -Wextra -Werror -O1 -g -D_DEFAULT_SOURCE ${EXTRA_CFLAGS:-}"
 
-CORE_SRCS="../core/onvif_xml.c ../core/onvif_wsse.c ../core/onvif_probe.c ../core/onvif_events_ring.c"
+CORE_SRCS="../core/onvif_xml.c ../core/onvif_time.c ../core/onvif_wsse.c ../core/onvif_probe.c ../core/onvif_events_ring.c"
 PORT_SRCS="../esp_idf/onvif_c_service.c ../esp_idf/onvif_c_events.c ../esp_idf/onvif_c_discovery.c"
 
 echo "== core goldens =="
