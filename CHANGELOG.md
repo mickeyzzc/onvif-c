@@ -1,13 +1,10 @@
 # Changelog
 
-## [0.2.0] — 2026-09-29
+## [0.3.0] — 2026-10-14
 
-Compatibility: ONVIF_C_VERSION 100 → 200. New capability
-package — Device/Media/Events statics, WS-Discovery Bye/Resolve,
-WS-Security UsernameToken (PasswordDigest) with 401 challenge path,
-Media2 minimal face. No breaking API changes (additions only).
+Time configuration (apply-or-fault SetSystemDateAndTime / SetNTP with
+integration seams) plus the WS-Discovery task-watchdog hardening fix.
 
-## [Unreleased]
 
 ### Added — time configuration seam: SetSystemDateAndTime / SetNTP (issue #43-class)
 
@@ -139,3 +136,12 @@ a full TDD harness before release.
   full Pull-Point cycle).
 - Bilingual README (EN / zh-CN) with quality-gate, byte-stability and
   integration documentation; CONTRIBUTING with the TDD workflow.
+
+## [0.2.0] — 2026-09-29
+
+Compatibility: ONVIF_C_VERSION 100 → 200. New capability
+package — Device/Media/Events statics, WS-Discovery Bye/Resolve,
+WS-Security UsernameToken (PasswordDigest) with 401 challenge path,
+Media2 minimal face. No breaking API changes (additions only).
+
+## [Unreleased]
