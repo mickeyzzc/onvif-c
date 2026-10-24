@@ -223,8 +223,9 @@ camera boards against the MiBee NVR. Client counterpart (Go):
 
 ## Documentation
 
-Topic guides live in the docs hub: <https://www.mlsbs.top/docs/mibeelibs>
-(`docs/` here is a redirect only).
+Topic guides live in this repository, bilingual:
+[`docs/README.md`](docs/README.md) is the index (`docs/en-US/` and
+`docs/zh-CN/`). Fixes land here by PR.
 
 ## License
 

@@ -191,9 +191,8 @@ v0.1.0 —— 首个发版；API 接缝稳定；在 [Mi-Bee Studio](https://gith
 
 ## 文档
 
-主题手册在文档站：<https://www.mlsbs.top/docs/mibeelibs>（仓内 `docs/`
-仅为重定向）。
-
+主题手册就在本仓库内，双语：[`docs/README.md`](docs/README.md) 为索引
+（`docs/en-US/` 与 `docs/zh-CN/`）。修订以 PR 落本仓。
 ## 许可
 
 MIT —— 见 [LICENSE](LICENSE)。抽取自 MiBee Cam 固件（Mi-Bee Studio）；
