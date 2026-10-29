@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+## [v0.3.1] — 2026-10-29
+
+The advertisement-truth patch: capabilities and services no longer
+advertise an endpoint no handler serves, and the README's security
+section states the real v0.2.0+ posture.
+
 ### Fixed
 
 - **GetCapabilities/GetServices no longer advertise
