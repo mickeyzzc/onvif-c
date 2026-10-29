@@ -87,28 +87,24 @@ static const char *G_DEVICE_INFO = "<?xml version=\"1.0\" encoding=\"utf-8\"?>"
                                    "</soap:Body>"
                                    "</soap:Envelope>";
 
-static const char *G_CAPS_NOEV =
-    "<?xml version=\"1.0\" encoding=\"utf-8\"?>"
-    "<soap:Envelope"
-    " xmlns:soap=\"http://www.w3.org/2003/05/soap-envelope\""
-    " xmlns:tt=\"http://www.onvif.org/ver10/schema\""
-    " xmlns:tds=\"http://www.onvif.org/ver10/device/wsdl\">"
-    "<soap:Body>"
-    "<tds:GetCapabilitiesResponse>"
-    "<tds:Capabilities>"
-    "<tt:Device>"
-    "<tt:XAddr>http://192.0.2.134:80/onvif/device_service</tt:XAddr>"
-    "</tt:Device>"
-    "<tt:Media>"
-    "<tt:XAddr>http://192.0.2.134:80/onvif/media_service</tt:XAddr>"
-    "</tt:Media>"
-    "<tt:Analytics>"
-    "<tt:XAddr>http://192.0.2.134:80/onvif/analytics_service</tt:XAddr>"
-    "</tt:Analytics>"
-    "</tds:Capabilities>"
-    "</tds:GetCapabilitiesResponse>"
-    "</soap:Body>"
-    "</soap:Envelope>";
+static const char *G_CAPS_NOEV = "<?xml version=\"1.0\" encoding=\"utf-8\"?>"
+                                 "<soap:Envelope"
+                                 " xmlns:soap=\"http://www.w3.org/2003/05/soap-envelope\""
+                                 " xmlns:tt=\"http://www.onvif.org/ver10/schema\""
+                                 " xmlns:tds=\"http://www.onvif.org/ver10/device/wsdl\">"
+                                 "<soap:Body>"
+                                 "<tds:GetCapabilitiesResponse>"
+                                 "<tds:Capabilities>"
+                                 "<tt:Device>"
+                                 "<tt:XAddr>http://192.0.2.134:80/onvif/device_service</tt:XAddr>"
+                                 "</tt:Device>"
+                                 "<tt:Media>"
+                                 "<tt:XAddr>http://192.0.2.134:80/onvif/media_service</tt:XAddr>"
+                                 "</tt:Media>"
+                                 "</tds:Capabilities>"
+                                 "</tds:GetCapabilitiesResponse>"
+                                 "</soap:Body>"
+                                 "</soap:Envelope>";
 
 static const char *G_STREAM_URI = "<?xml version=\"1.0\" encoding=\"utf-8\"?>"
                                   "<soap:Envelope"
@@ -218,7 +214,7 @@ static void test_device_service_xml(void)
     CHECK(n > 0 && strstr(g, "http://192.0.2.134:8080/onvif/device_service") &&
               strstr(g, "http://192.0.2.134:8080/onvif/media_service") &&
               strstr(g, "http://192.0.2.134:8080/onvif/events_service") &&
-              strstr(g, "http://192.0.2.134:8080/onvif/analytics_service"),
+              !strstr(g, "analytics_service"),
           "GetCapabilities honors non-default http port");
 
     n = onvif_xml_profiles(g, sizeof(g), 12);
@@ -454,9 +450,7 @@ static const char *G_NEW_SERVICES =
     "tds:Service><tds:Service><tds:Namespace>http://www.onvif.org/ver10/media/wsdl</tds:Namespace"
     "><tds:XAddr>http://192.0.2.134:8080/onvif/media_service</tds:XAddr><tds:Version><tt:Major>2<"
     "/tt:Major><tt:Minor>5</tt:Minor></tds:Version></tds:Service><tds:Service><tds:Namespace>http"
-    "://www.onvif.org/ver20/analytics/wsdl</tds:Namespace><tds:XAddr>http://192.0.2.134:8080/onvi"
-    "f/analytics_service</tds:XAddr><tds:Version><tt:Major>2</tt:Major><tt:Minor>5</tt:Minor></td"
-    "s:Version></tds:Service><tds:Service><tds:Namespace>http://www.onvif.org/ver20/media/wsdl</t"
+    "://www.onvif.org/ver20/media/wsdl</t"
     "ds:Namespace><tds:XAddr>http://192.0.2.134:8080/onvif/media2_service</tds:XAddr><tds:Version"
     "><tt:Major>2</tt:Major><tt:Minor>5</tt:Minor></tds:Version></tds:Service></tds:GetServicesRe"
     "sponse></soap:Body></soap:Envelope>";

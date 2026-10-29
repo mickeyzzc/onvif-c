@@ -3,8 +3,8 @@
 一个用纯 C 写的极简 ONVIF Device（服务端）库：让 ESP32 相机通过
 SOAP + WS-Discovery + Pull-Point 事件暴露给 NVR，零第三方依赖、代码
 占用约 10 KB。抽取自生产环境的 MiBee Cam 固件，响应字节对真实 NVR
-保持稳定。**尚未发版**——库处于测试迭代中，vendor 时请锁定具体
-commit。
+保持稳定。GitHub 上已有带 tag 的发版（当前 v0.3.0）；vendor 时请锁定
+发版 tag，不要跟分支尖。
 
 兄弟实现：[onvif-rs](https://github.com/mickeyzzc/onvif-rs/blob/main/docs/zh-CN/onvif-rs-quickstart.md)（Rust，Linux 设备端）与
 Go 客户端 [onvif-go](https://github.com/mickeyzzc/onvif-go/blob/main/docs/zh-CN/onvif-go-quickstart.md)。设备形态是 ESP-IDF 固件、
@@ -14,11 +14,17 @@ Go 客户端 [onvif-go](https://github.com/mickeyzzc/onvif-go/blob/main/docs/zh-
 
 | 服务面 | 动作 |
 | --- | --- |
-| SOAP Device 服务 | `GetSystemDateAndTime`、`GetDeviceInformation`、`GetCapabilities` |
-| SOAP Media 服务 | `GetProfiles`、`GetStreamUri`、`GetSnapshotUri` |
-| Pull-Point 事件 | `CreatePullPointSubscription`、`PullMessages`、`Unsubscribe` —— `tns1:VideoSource/MotionAlarm` 主题（`Source=CSI`、`State`、`Score 0-100`） |
-| WS-Discovery | UDP 3702 / 组播 239.255.255.250 —— 单播 ProbeMatches、周期 Hello（约 30 s） |
+| SOAP Device 服务 | `GetSystemDateAndTime`、`GetDeviceInformation`、`GetCapabilities`、`GetServices`、`GetScopes`、`SetSystemDateAndTime`（应答）、`SystemReboot`、设备 `GetServiceCapabilities` |
+| SOAP Media 服务 | `GetProfiles`、`GetStreamUri`、`GetSnapshotUri`、`GetVideoSources`、视频编码器配置族、`SetSynchronizationPoint` |
+| Media2（最小面） | Profile-T 进入路径（`GetProfiles`/`GetStreamUri` 类动作，ver20 tr2 形状） |
+| Pull-Point 事件 | `CreatePullPointSubscription`、`PullMessages`、`Unsubscribe` —— `tns1:VideoSource/MotionAlarm` 主题（`Source=CSI`、`State`、`Score 0-100`）；设计上无长轮询 |
+| WS-Discovery | UDP 3702 / 组播 239.255.255.250 —— 单播 ProbeMatches、周期 Hello（约 30 s）、停止时 Bye、Resolve |
+| 可选 WS-Security | UsernameToken PasswordDigest（可选 PasswordText）；拒绝时 HTTP 401 + `ter:NotAuthorized`（v0.2.0+） |
 | 可选 mDNS | `_onvif._tcp` 广告 |
+
+按范围决策**不提供**：PTZ、imaging、事件推送（wsnt:Subscribe）、
+analytics、以及任何客户端半边——这是面向 NVR 对接的设备侧库；客户端
+角色由 Go / Rust 兄弟库覆盖。
 
 没有 XML 解析器、没有请求缓冲之外的动态状态：动作识别靠 `strstr()`，
 响应用 `snprintf()` 生成。运动生产者钩子非阻塞，可从传感器回调上下文
@@ -61,7 +67,7 @@ onvif_c_motion(false, 4);
 （`serial`/`uuid`/`ip`/`stream_uri`）、可选覆盖（`snapshot_uri`、
 `frame_rate`、`scopes`）与运行时门控。板级细节绝不漏进库内。
 `ONVIF_C_VERSION` 返回 `major*10000 + minor*100 + patch`（v0.2.0
-即 200）。
+即 300）。
 
 IP 回调返回 `NULL`/`"0.0.0.0"` 期间，库继续应答 SOAP 但在发现面上
 保持安静；`cfg->http_port` 流入所有广告 URI（capabilities XAddrs、

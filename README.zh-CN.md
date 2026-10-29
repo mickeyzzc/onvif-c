@@ -122,12 +122,16 @@ Pull-Point 订阅周期，全过退出 0。
 
 ## 安全性
 
-**onvif-c 不实现任何 ONVIF 认证。** 没有 WS-UsernameToken / `wsse` 头解析、
-没有 HTTP basic/digest、没有凭据回调、没有 401 路径——所有已服务动作、
-Pull-Point 订阅、WS-Discovery 应答对网络上任何可达本机的主机开放。仅部署
-在所有主机都可信的网络（或放在强制认证的反向代理之后）；另外，配置了
-凭据的 ONVIF 客户端可能拒绝添加本设备。这是极简设备库的有意取舍而非
-疏漏；需要认证请作为后续小版本的功能需求提出。
+**默认无认证。** 开箱状态下所有已服务动作、Pull-Point 订阅、WS-Discovery
+应答对网络上任何可达本机的主机开放——仅部署在所有主机都可信的网络（或
+放在强制认证的反向代理之后）。
+
+可选 WS-Security UsernameToken 自 v0.2.0（issue #17）起提供：设置
+`auth_password` 后，请求必须携带合法的 `wsse:UsernameToken`
+`PasswordDigest`（`auth_allow_plaintext` 可选接受 `PasswordText`）；
+被拒请求得到 HTTP 401 + `ter:NotAuthorized` SOAP fault。HTTP Basic /
+HTTP Digest 传输层认证与 TLS 仍未实现——这是极简设备库的有意取舍而非
+疏漏；需要请作为功能需求提出。
 
 ## 字节稳定保证
 
@@ -184,7 +188,7 @@ Pull-Point 订阅、WS-Discovery 应答对网络上任何可达本机的主机�
 
 ## 状态
 
-v0.1.0 —— 首个发版；API 接缝稳定；在 [Mi-Bee Studio](https://github.com/Mi-Bee-Studio)
+v0.3.0 —— API 接缝稳定；在 [Mi-Bee Studio](https://github.com/Mi-Bee-Studio)
 四块 ESP32/ESP32-S3 相机板上对 MiBee NVR 每日生产验证。客户端对应（Go）：
 [onvif-go](https://github.com/mickeyzzc/onvif-go)；兄弟设备端库（Rust）：
 [onvif-rs](https://github.com/mickeyzzc/onvif-rs)。

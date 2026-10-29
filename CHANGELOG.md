@@ -1,5 +1,29 @@
 # Changelog
 
+## [Unreleased]
+
+### Fixed
+
+- **GetCapabilities/GetServices no longer advertise
+  `/onvif/analytics_service`** — the advertisement was dangling: no
+  analytics handler exists behind it, so a client following the
+  capabilities answer got HTTP 404s (or worse, probed a dead endpoint).
+  Advertised services now exactly match the served set. Golden tests
+  updated, including a negative assertion that the string never returns.
+
+### Docs
+
+- README Security section (en+zh) rewritten: the "no authentication
+  exists, request it as a feature" claim was false since v0.2.0 — now
+  states the real posture (no auth by default; opt-in WS-Security
+  UsernameToken since v0.2.0; HTTP Basic/Digest + TLS remain unimplemented
+  scope decisions). Status line bumped v0.1.0 → v0.3.0.
+- Quickstart (en+zh): "no version released yet" corrected (three tags
+  exist), the served-surface table synced with the v0.3.0 action set
+  (Device/Media/Media2/Discovery additions, WS-Security row), and the
+  not-served scope list made explicit (PTZ, imaging, event push,
+  analytics, client half — by design; siblings cover client roles).
+
 ## [0.3.0] — 2026-10-14
 
 Time configuration (apply-or-fault SetSystemDateAndTime / SetNTP with
@@ -143,5 +167,3 @@ Compatibility: ONVIF_C_VERSION 100 → 200. New capability
 package — Device/Media/Events statics, WS-Discovery Bye/Resolve,
 WS-Security UsernameToken (PasswordDigest) with 401 challenge path,
 Media2 minimal face. No breaking API changes (additions only).
-
-## [Unreleased]
