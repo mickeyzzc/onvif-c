@@ -4,8 +4,8 @@ A minimal ONVIF Device (server) library in plain C for ESP-IDF: expose an
 ESP32 camera to NVRs over SOAP + WS-Discovery + Pull-Point events with zero
 third-party dependencies and a ~10 KB code footprint. Extracted from the
 production MiBee Cam firmware; response bytes are stable against real NVRs.
-No version has been released yet — the library is in active testing; track
-a commit when vendoring.
+Tagged releases are on GitHub (current: v0.3.0); vendor a release tag,
+not a branch tip.
 
 Sibling implementations: [onvif-rs](https://github.com/mickeyzzc/onvif-rs/blob/main/docs/en-US/onvif-rs-quickstart.md) (Rust, Linux
 device side) and the Go client [onvif-go](https://github.com/mickeyzzc/onvif-go/blob/main/docs/en-US/onvif-go-quickstart.md). Choose
@@ -15,11 +15,17 @@ onvif-c when the device is an ESP-IDF firmware and heap budget is tight.
 
 | Surface | Actions |
 | --- | --- |
-| SOAP Device service | `GetSystemDateAndTime`, `GetDeviceInformation`, `GetCapabilities` |
-| SOAP Media service | `GetProfiles`, `GetStreamUri`, `GetSnapshotUri` |
-| Pull-Point Events | `CreatePullPointSubscription`, `PullMessages`, `Unsubscribe` — `tns1:VideoSource/MotionAlarm` topic (`Source=CSI`, `State`, `Score 0-100`) |
-| WS-Discovery | UDP 3702 / multicast 239.255.255.250 — unicast ProbeMatches, periodic Hello (~30 s) |
+| SOAP Device service | `GetSystemDateAndTime`, `GetDeviceInformation`, `GetCapabilities`, `GetServices`, `GetScopes`, `SetSystemDateAndTime` (ack), `SystemReboot`, device `GetServiceCapabilities` |
+| SOAP Media service | `GetProfiles`, `GetStreamUri`, `GetSnapshotUri`, `GetVideoSources`, the video-encoder configuration family, `SetSynchronizationPoint` |
+| Media2 (minimal face) | the Profile-T entry path (`GetProfiles`/`GetStreamUri` class actions, ver20 tr2 shapes) |
+| Pull-Point Events | `CreatePullPointSubscription`, `PullMessages`, `Unsubscribe` — `tns1:VideoSource/MotionAlarm` topic (`Source=CSI`, `State`, `Score 0-100`); no long polling by design |
+| WS-Discovery | UDP 3702 / multicast 239.255.255.250 — unicast ProbeMatches, periodic Hello (~30 s), Bye on stop, Resolve |
+| Optional WS-Security | UsernameToken PasswordDigest (opt-in PasswordText); HTTP 401 + `ter:NotAuthorized` on rejection (v0.2.0+) |
 | Optional mDNS | `_onvif._tcp` advertisement |
+
+Not served, by scope decision: PTZ, imaging, event push (wsnt:Subscribe),
+analytics, and any client half — this is a device-side library for
+NVR-facing firmware; the Go and Rust siblings cover client roles.
 
 No XML parser, no dynamic state beyond per-request buffers: action detection
 is `strstr()`, responses are `snprintf()`. The motion producer hook is
@@ -62,7 +68,7 @@ onvif_c_motion(false, 4);
 required callbacks (`serial`/`uuid`/`ip`/`stream_uri`), optional overrides
 (`snapshot_uri`, `frame_rate`, `scopes`), and runtime gates. Board specifics
 never leak into the library. `ONVIF_C_VERSION` reports `major*10000 +
-minor*100 + patch` (200 for v0.2.0).
+minor*100 + patch` (300 for v0.3.0).
 
 While the IP callback returns `NULL`/`"0.0.0.0"` the library keeps serving
 SOAP but stays quiet on discovery; `cfg->http_port` flows into every

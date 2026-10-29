@@ -111,14 +111,10 @@ int onvif_xml_capabilities(char *buf, size_t n, const char *ip, unsigned port, b
         }
     }
     off += snprintf(buf + off, n - off,
-                    "<tt:Analytics>"
-                    "<tt:XAddr>http://%s:%u/onvif/analytics_service</tt:XAddr>"
-                    "</tt:Analytics>"
                     "</tds:Capabilities>"
                     "</tds:GetCapabilitiesResponse>"
                     "</soap:Body>"
-                    "</soap:Envelope>",
-                    ip, port);
+                    "</soap:Envelope>");
     return off;
 }
 
@@ -386,13 +382,8 @@ int onvif_xml_services(char *buf, size_t n, const char *ip, unsigned port, bool 
                        "<tds:Namespace>http://www.onvif.org/ver10/media/wsdl</tds:Namespace>"
                        "<tds:XAddr>http://%s:%u/onvif/media_service</tds:XAddr>"
                        "<tds:Version><tt:Major>2</tt:Major><tt:Minor>5</tt:Minor></tds:Version>"
-                       "</tds:Service>"
-                       "<tds:Service>"
-                       "<tds:Namespace>http://www.onvif.org/ver20/analytics/wsdl</tds:Namespace>"
-                       "<tds:XAddr>http://%s:%u/onvif/analytics_service</tds:XAddr>"
-                       "<tds:Version><tt:Major>2</tt:Major><tt:Minor>5</tt:Minor></tds:Version>"
                        "</tds:Service>",
-                       ip, port, ip, port, ip, port);
+                       ip, port, ip, port);
     if (off < 0 || (size_t)off >= n) {
         return off;
     }

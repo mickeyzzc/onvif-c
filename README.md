@@ -141,15 +141,18 @@ component in lockstep and are the upstream production users.
 
 ## Security
 
-**onvif-c does not implement ONVIF authentication.** There is no
-WS-UsernameToken / `wsse` header parsing, no HTTP basic/digest auth, no
-credential callback, and no 401 path — every served action, the Pull-Point
-subscription, and the WS-Discovery responder answer any host that can reach
-the device. Deploy it only on a network where every host is trusted (or
-behind a reverse proxy that enforces credentials), and note that an ONVIF
-client configured with credentials may refuse to add the device. This is a
-deliberate scope decision for a minimal device library, not an oversight; if
-you need auth, treat it as a feature request for a future minor version.
+**No authentication by default.** Out of the box every served action, the
+Pull-Point subscription, and the WS-Discovery responder answer any host
+that can reach the device — deploy on a network where every host is
+trusted (or behind a reverse proxy that enforces credentials).
+
+Opt-in WS-Security UsernameToken has shipped since v0.2.0 (issue #17):
+set `auth_password` and requests must carry a valid `wsse:UsernameToken`
+`PasswordDigest` (opt-in `PasswordText` acceptance via `auth_allow_plaintext`);
+rejected requests get HTTP 401 with a `ter:NotAuthorized` SOAP fault. The
+HTTP Basic / HTTP Digest transport modes and TLS remain unimplemented —
+scope decisions for a minimal device library, not oversights; treat them
+as feature requests if you need them.
 
 ## Byte stability guarantee
 
@@ -215,7 +218,7 @@ Semantic versioning; `ONVIF_C_VERSION` encodes it as
 
 ## Status
 
-v0.1.0 — first release; API seam stable; production-tested daily at
+v0.3.0 — API seam stable; production-tested daily at
 [Mi-Bee Studio](https://github.com/Mi-Bee-Studio) on four ESP32/ESP32-S3
 camera boards against the MiBee NVR. Client counterpart (Go):
 [onvif-go](https://github.com/mickeyzzc/onvif-go); sibling device library
